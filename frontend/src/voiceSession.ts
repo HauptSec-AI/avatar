@@ -45,38 +45,48 @@ export async function startVoiceCall(
 
   let muted = false;
   let sessionCapTimer: number | undefined;
+  let conversation: Awaited<ReturnType<typeof VoiceConversation.startSession>>;
 
-  const conversation = await VoiceConversation.startSession({
-    conversationToken: session.token,
-    connectionType: "webrtc",
-    // Our own conversation_id, not ElevenLabs'. Interpolated into the tool webhook
-    // request bodies (see backend/app/voice.py build_agent_config) so faq_tool and
-    // push_tool always know which thread they're part of, with no lookup needed.
-    dynamicVariables: { conversation_id: conversationId },
-    onConnect: ({ conversationId: elevenlabsConversationId }) => {
-      void notifyVoiceSessionStarted(conversationId, elevenlabsConversationId);
-      // Client-side session-length cap: a UX safeguard against an accidentally
-      // open-ended call, not an abuse defense -- our backend isn't in the media
-      // path, so it can't forcibly end a live ElevenLabs session. The real abuse
-      // backstops are the same as text chat: rate-limited session minting
-      // (/api/voice/session) and ElevenLabs' own account-level spend/concurrency
-      // caps (see SPEC-VOICE.md).
-      sessionCapTimer = window.setTimeout(() => {
-        void conversation?.endSession();
-      }, session.maxSessionSeconds * 1000);
-    },
-    onStatusChange: ({ status }) => callbacks.onStatusChange(status),
-    onModeChange: ({ mode }) => callbacks.onModeChange(mode),
-    onMessage: ({ message, role }) => {
-      callbacks.onTranscript({ role: role === "user" ? "visitor" : "avatar", text: message });
-    },
-    onAgentToolRequest: (props) => callbacks.onToolStatus(props.tool_name, "called"),
-    onAgentToolResponse: (props) => callbacks.onToolStatus(props.tool_name, "done"),
-    onError: (message) => callbacks.onError(message),
-    onDisconnect: () => {
-      if (sessionCapTimer !== undefined) window.clearTimeout(sessionCapTimer);
-    },
-  });
+  try {
+    conversation = await VoiceConversation.startSession({
+      conversationToken: session.token,
+      connectionType: "webrtc",
+      // Our own conversation_id, not ElevenLabs'. Interpolated into the tool webhook
+      // request bodies (see backend/app/voice.py build_agent_config) so faq_tool and
+      // push_tool always know which thread they're part of, with no lookup needed.
+      dynamicVariables: { conversation_id: conversationId },
+      onConnect: ({ conversationId: elevenlabsConversationId }) => {
+        void notifyVoiceSessionStarted(conversationId, elevenlabsConversationId);
+        // Client-side session-length cap: a UX safeguard against an accidentally
+        // open-ended call, not an abuse defense -- our backend isn't in the media
+        // path, so it can't forcibly end a live ElevenLabs session. The real abuse
+        // backstops are the same as text chat: rate-limited session minting
+        // (/api/voice/session) and ElevenLabs' own account-level spend/concurrency
+        // caps (see SPEC-VOICE.md).
+        sessionCapTimer = window.setTimeout(() => {
+          void conversation?.endSession();
+        }, session.maxSessionSeconds * 1000);
+      },
+      onStatusChange: ({ status }) => callbacks.onStatusChange(status),
+      onModeChange: ({ mode }) => callbacks.onModeChange(mode),
+      onMessage: ({ message, role }) => {
+        callbacks.onTranscript({ role: role === "user" ? "visitor" : "avatar", text: message });
+      },
+      onAgentToolRequest: (props) => callbacks.onToolStatus(props.tool_name, "called"),
+      onAgentToolResponse: (props) => callbacks.onToolStatus(props.tool_name, "done"),
+      onError: (message) => callbacks.onError(message),
+      onDisconnect: () => {
+        if (sessionCapTimer !== undefined) window.clearTimeout(sessionCapTimer);
+      },
+    });
+  } catch (e) {
+    // Most commonly a denied/unavailable microphone (getUserMedia rejects before
+    // the SDK ever calls its own onError) -- without this, the caller only sees a
+    // silent "disconnected" status with no explanation of what went wrong.
+    const message = e instanceof Error ? e.message : "Couldn't connect. Check your microphone permission and try again.";
+    callbacks.onError(message);
+    throw e;
+  }
 
   return {
     endCall: () => conversation.endSession(),
