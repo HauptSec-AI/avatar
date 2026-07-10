@@ -119,18 +119,24 @@ test.describe("Admin dashboard", () => {
     await adminContext.close();
   });
 
-  test("mobile master/detail: back control returns to inbox", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "master/detail is mobile-only behavior");
+  test("mobile master/detail: back control returns to inbox", async ({ page, request }, testInfo) => {
+    test.skip(!testInfo.project.name.startsWith("mobile"), "master/detail is mobile-only behavior");
+    // seeding does 2 sequential real LLM turns (2nd fires push_tool + a live Pushover call) -- give it room.
+    test.setTimeout(90_000);
+    await seedContactCaptureConversation(request);
     await loginAsAdmin(page);
     await page.reload();
     await page.locator(".convo-item").first().click();
     await expect(page.locator("body")).toHaveClass(/detail-open/);
     await expect(page.locator("#threadView")).toBeVisible();
-    await page.screenshot({ path: "screenshots/admin/08-mobile-detail.png", fullPage: true });
+    // #threadView becomes visible synchronously, before the async fetch that actually
+    // populates it -- wait for real content, not just the shell, before asserting/screenshotting.
+    await expect(page.locator(".msg").first()).toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: `screenshots/admin/08-mobile-detail-${testInfo.project.name}.png`, fullPage: true });
 
     await page.click("#backBtn");
     await expect(page.locator("body")).not.toHaveClass(/detail-open/);
-    await page.screenshot({ path: "screenshots/admin/09-mobile-inbox.png", fullPage: true });
+    await page.screenshot({ path: `screenshots/admin/09-mobile-inbox-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test("keyboard arrow navigation moves selection between conversations", async ({ page, request }) => {

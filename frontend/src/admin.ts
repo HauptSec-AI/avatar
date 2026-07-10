@@ -166,7 +166,7 @@ async function openConversation(id: string): Promise<void> {
   activeConversationId = id;
   renderedThreadIds.clear();
   currentThreadRows = [];
-  threadInnerEl.innerHTML = "";
+  threadInnerEl.innerHTML = `<div class="thread-loading">Loading…</div>`;
   emptyState.style.display = "none";
   threadView.style.display = "flex";
   document.body.classList.add("detail-open");
@@ -179,6 +179,7 @@ async function openConversation(id: string): Promise<void> {
       summary.unread = false;
       summary.needs_attention = false;
     }
+    threadInnerEl.innerHTML = "";
     appendThreadRows(rows);
     renderThreadHeader(id);
     renderSidebar();
