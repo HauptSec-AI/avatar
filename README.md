@@ -258,3 +258,7 @@ Putting the app on your own website is **optional** - the `https://<your-app>.fl
 
 The backend guards your API key automatically, with no configuration: visitor messages longer than 20,000 characters are truncated (with a short note appended) before being stored or sent to the model, and more than 20 messages per minute from a single conversation are rejected (HTTP 429, with a friendly slow-down message in the chat) before any model call is made.
 
+## Credit
+
+Based on [Ed Donner's Avatar project](https://github.com/ed-donner/avatar).
+
