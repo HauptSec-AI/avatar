@@ -91,7 +91,7 @@ flyctl status -a "$APP" >/dev/null 2>&1 || { echo "Creating $APP..."; flyctl app
 KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_VOICE_ID ELEVENLABS_WEBHOOK_SECRET VOICE_MAX_SESSION_SECONDS ELEVENLABS_LLM"
 args=()
 for k in $KEYS; do
-  v=$(grep -E "^${k}=" .env | head -1 | cut -d= -f2-)
+  v=$(grep -E "^${k}=" .env | head -1 | cut -d= -f2- || true)
   v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
   [ -n "$v" ] && args+=("${k}=${v}")
 done
