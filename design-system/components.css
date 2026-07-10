@@ -196,7 +196,7 @@ body {
 .avatar-initials--sm { width: 30px; height: 30px; font-size: var(--text-2xs); }
 
 /* Avatar (twin) image with cyan identity ring */
-.avatar-twin { border: 1.5px solid var(--blue-line); box-shadow: 0 0 0 3px rgba(40,168,224,0.08); }
+.avatar-twin { border: 1.5px solid var(--blue-line); box-shadow: 0 0 0 3px rgba(10,125,26,0.08); }
 
 /* Human image with the yellow spark ring — the designed "live human" moment */
 .avatar-human { border: 2px solid var(--yellow-strong); box-shadow: 0 0 0 3px var(--yellow-soft); }

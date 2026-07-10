@@ -5,12 +5,16 @@
    ----------------------------------------------------------------------------
    Brand palette (fixed, from SPEC):
      Yellow  #ecad0a  — the "spark": accent lines, highlights, human-in-the-loop
-     Blue    #209dd7  — primary identity: links, key sections, the Avatar
+     Blue    #209dd7  — original identity hue (--brand-blue, kept for reference only)
      Purple  #753991  — RESERVED for primary actions (submit) only
      Navy    #032147  — structure / headings (and the dark canvas itself)
      Gray    #888888  — supporting text, labels
+   The light theme's "blue" system-accent slot (links, Keep-chat toggle, visitor
+   initials badge, brand mark, etc.) has been swapped from --brand-blue to a
+   Matrix green (Islam Green family, tuned for light-background contrast — Erin
+   itself fails WCAG on white) so both themes share one green identity.
    Rules: no gradients in UI chrome, no purple overuse, no left-border accent
-   panels, no emoji. Blue-led, yellow as the spark.
+   panels, no emoji. Yellow as the spark.
    ========================================================================== */
 
 :root {
@@ -181,11 +185,13 @@
   --text-on-accent: #ffffff;
   --text-on-yellow: #1a1303;
 
-  --blue: #1487c1;
-  --blue-strong: #209dd7;
-  --blue-ink: #136491;
-  --blue-soft: rgba(32, 157, 215, 0.10);
-  --blue-line: rgba(32, 157, 215, 0.35);
+  /* "Blue" slot swapped to a Matrix green tuned for light-background contrast
+     (Erin itself fails WCAG on white; this ramp keeps the Islam Green hue). */
+  --blue: #0f9420;
+  --blue-strong: #0a7d1a;
+  --blue-ink: #065e10;
+  --blue-soft: rgba(10, 125, 26, 0.10);
+  --blue-line: rgba(10, 125, 26, 0.35);
 
   --yellow: #ecad0a;
   --yellow-strong: #d39c07;
@@ -200,7 +206,7 @@
 
   --focus-ring: rgba(236, 173, 10, 0.6);
   --danger: #c2492f;
-  --positive: #1689c2;
+  --positive: #008F11;
 
   --role-visitor: var(--blue-strong);
   --role-avatar: #1b95a6;
@@ -209,7 +215,7 @@
   --shadow-sm: 0 1px 2px rgba(11, 33, 56, 0.06);
   --shadow-md: 0 10px 28px -12px rgba(11, 33, 56, 0.18), 0 2px 6px rgba(11,33,56,0.06);
   --shadow-lg: 0 28px 64px -20px rgba(11, 33, 56, 0.26), 0 6px 16px rgba(11,33,56,0.08);
-  --glow-blue: 0 0 0 1px var(--blue-line), 0 10px 30px -12px rgba(32,157,215,0.30);
+  --glow-blue: 0 0 0 1px var(--blue-line), 0 10px 30px -12px rgba(10,125,26,0.30);
   --glow-yellow: 0 0 0 1px var(--yellow-line), 0 10px 30px -12px rgba(236,173,10,0.28);
 
   --grid-line: rgba(3, 33, 71, 0.035);

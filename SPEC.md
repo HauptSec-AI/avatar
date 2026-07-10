@@ -83,9 +83,15 @@ Role identity in dark mode stays within this green family rather than using sepa
 role; visitor/avatar/human are distinguished by brightness and glow intensity (human gets the
 most pronounced glow) instead of by color.
 
-**Light theme keeps the original brand palette:**
-- Accent Yellow: `#ecad0a` - accent lines, highlights
-- Blue Primary: `#209dd7` - links, key sections
+**Light theme keeps the original brand palette, with one deliberate deviation:** the system-accent
+("blue") slot — links, the Keep-chat toggle, the visitor initials badge, the brand mark icon, the
+"read"/synced indicator, and similar UI accents — is swapped to a Matrix green so both themes share
+one green identity, rather than reusing the original blue. Erin itself fails WCAG contrast on a
+white background, so light mode uses a darker Islam-Green-family ramp tuned for legibility
+(`--blue-ink: #065e10`, `--blue-strong: #0a7d1a`, `--blue: #0f9420`, all ≥4:1 against white). Purple,
+yellow, navy and gray are unchanged:
+- Accent Yellow: `#ecad0a` - accent lines, highlights, human-in-the-loop
+- System Green (was Blue): `#0a7d1a` - links, key sections, system accents (see above)
 - Purple Secondary: `#753991` - submit buttons, important actions
 - Dark Navy: `#032147` - main headings
 - Gray Text: `#888888` - supporting text, labels
@@ -110,7 +116,7 @@ A complete, build-ready visual and interaction system has been provided in the `
 - **`Avatar Design System.html`** - the navigable design-system document (it dogfoods its own tokens). Open this rendered first.
 - **`SKILL.md`** - the front-end build brief: how to turn the system into the real product UI, plus an acceptance checklist.
 - **`README.md`** - overview and contents table.
-- **`tokens.css`** - single source of truth: brand palette, type scale, spacing, radii, motion, and full **dark** (the hero) and **light** themes, switched via `[data-theme="dark"|"light"]` on `<html>`. Dark theme uses the Matrix palette above, with visitor/avatar/human distinguished by brightness and glow rather than hue; light theme keeps the original role colours (visitor = blue, avatar/twin = cyan, human = yellow).
+- **`tokens.css`** - single source of truth: brand palette, type scale, spacing, radii, motion, and full **dark** (the hero) and **light** themes, switched via `[data-theme="dark"|"light"]` on `<html>`. Dark theme uses the Matrix palette above, with visitor/avatar/human distinguished by brightness and glow rather than hue; light theme keeps the original role colours except visitor, which was moved from blue to a Matrix green alongside the rest of the system-accent slot (visitor = green, avatar/twin = cyan, human = yellow).
 - **`components.css`** - build-ready component classes shared by the mockups and the doc: buttons, fields, the Keep-chat switch, badges, the three message bubbles, tool-status lines, the `Qn` instant-tag, the composer, inbox rows, and avatars. Depends on `tokens.css`.
 - **`icons.svg`** - icon sprite, used as `<use href="icons.svg#i-...">`; icons inherit `currentColor`.
 - **`doc.css`** - styles for the doc page only (NOT product code).
@@ -120,7 +126,7 @@ A complete, build-ready visual and interaction system has been provided in the `
 
 ### Design language
 
-Dark-first; editorial serif **Newsreader** (display) + crisp grotesque **Hanken Grotesk** (UI) + **JetBrains Mono** (technical layer). Dark theme is a **Matrix palette** (Vampire Black canvas, Dark Green raised surfaces, Islam Green borders/links, Erin as the bright primary-action/focus/glow color); light theme keeps the original **blue-led** identity with **yellow as the "spark" reserved for the human-in-the-loop**, and **purple locked to primary actions only**. No gradients in chrome, no left-edge accent bars, no emoji. This matches the SPEC palette above and the "not a generic chatbot" mandate.
+Dark-first; editorial serif **Newsreader** (display) + crisp grotesque **Hanken Grotesk** (UI) + **JetBrains Mono** (technical layer). Dark theme is a **Matrix palette** (Vampire Black canvas, Dark Green raised surfaces, Islam Green borders/links, Erin as the bright primary-action/focus/glow color); light theme keeps the original layout and most of the brand palette but swaps its system-accent slot from blue to a **Matrix green** (a WCAG-tuned Islam Green ramp), with **yellow as the "spark" reserved for the human-in-the-loop**, and **purple locked to primary actions only**. No gradients in chrome, no left-edge accent bars, no emoji. This matches the SPEC palette above and the "not a generic chatbot" mandate.
 
 ### How to use it in the build
 
