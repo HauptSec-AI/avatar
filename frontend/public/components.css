@@ -17,8 +17,14 @@ body {
 }
 ::selection { background: var(--yellow-soft); color: var(--text); }
 
-/* ---- Icon ---- */
-.icon { width: 20px; height: 20px; display: inline-block; flex: none; vertical-align: middle; }
+/* ---- Icon ----
+   fill/stroke set here (not inside icons.svg's own <style>) because Safari does not apply an
+   externally-referenced SVG document's internal stylesheet to elements pulled in via
+   <use href="icons.svg#i-x">. These are inherited SVG properties, so they cascade correctly
+   into the cloned <use> content in every browser; symbols needing a solid fill mark it with an
+   inline fill="currentColor" attribute instead of a CSS class for the same cross-browser reason. */
+.icon { width: 20px; height: 20px; display: inline-block; flex: none; vertical-align: middle;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .icon--sm { width: 16px; height: 16px; }
 .icon--lg { width: 24px; height: 24px; }
 .icon--xl { width: 32px; height: 32px; }
