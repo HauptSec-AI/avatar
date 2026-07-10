@@ -26,6 +26,12 @@ ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
 ELEVENLABS_WEBHOOK_SECRET = os.environ.get("ELEVENLABS_WEBHOOK_SECRET", "")
 VOICE_MAX_SESSION_SECONDS = int(os.environ.get("VOICE_MAX_SESSION_SECONDS", "600"))
+# ElevenLabs-managed LLM for voice, independent of MODEL/OPENROUTER_API_KEY (text chat).
+# Custom LLM (routing voice through OpenRouter, like text) isn't allowed on agents using
+# an Instant Voice Clone -- discovered via a live 400 from ElevenLabs' own API -- so voice
+# uses one of ElevenLabs' managed models instead. Switch this if you have a Professional
+# Voice Clone and want voice on OpenRouter too (see SPEC-VOICE.md).
+ELEVENLABS_LLM = os.environ.get("ELEVENLABS_LLM", "gpt-4o-mini")
 
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"

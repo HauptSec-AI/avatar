@@ -5,6 +5,7 @@ import json
 import logging
 import uuid
 
+import requests
 from agents import Runner
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -159,6 +160,11 @@ async def voice_session(payload: VoiceSessionRequest):
         token = voice.mint_conversation_token()
     except voice.VoiceNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except requests.RequestException:
+        logger.exception("Failed to mint an ElevenLabs conversation token")
+        raise HTTPException(
+            status_code=502, detail="Couldn't reach the voice service. Please try again in a moment."
+        ) from None
     return {
         "token": token,
         "agent_id": config.ELEVENLABS_AGENT_ID,
@@ -191,7 +197,17 @@ async def voice_tool_push(payload: VoicePushToolRequest):
 @app.post("/api/voice/webhook")
 async def voice_webhook(request: Request):
     raw_body = await request.body()
-    if not voice.verify_webhook_signature(raw_body, request.headers.get("elevenlabs-signature")):
+    signature_header = request.headers.get("elevenlabs-signature")
+    if not voice.verify_webhook_signature(raw_body, signature_header):
+        # Signature format hasn't been exercised against a real payload yet (see
+        # SPEC-VOICE.md's open items) -- log what we actually received so a live
+        # failure is diagnosable without another debug-script round trip.
+        logger.warning(
+            "Voice webhook signature check failed. header=%r all_headers=%r body_preview=%r",
+            signature_header,
+            dict(request.headers),
+            raw_body[:500],
+        )
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     payload = json.loads(raw_body)

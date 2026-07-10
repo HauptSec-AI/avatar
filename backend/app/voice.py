@@ -96,24 +96,39 @@ def _tool_auth_headers() -> dict:
     return {"Authorization": f"Bearer {config.ELEVENLABS_WEBHOOK_SECRET}"}
 
 
+VOICE_PROMPT_ADDENDUM = """
+
+# Voice mode
+
+You are in a live VOICE conversation right now, not text chat -- everything you say is read
+aloud by text-to-speech. Never use Markdown (no **bold**, no [links](url), no bullet lists,
+no headers): speak in plain, natural sentences. Keep responses noticeably shorter than you
+would in text -- a sentence or two per turn, not a paragraph -- and pause for the visitor to
+react rather than delivering a monologue. If you'd normally share a link (e.g. from the FAQ),
+say what it is in words instead ("you can find that on my LinkedIn") rather than reading a URL
+aloud."""
+
+
 def build_agent_config(base_url: str) -> dict:
     """The agent-config payload used to create/update the ElevenLabs agent.
 
     `base_url` is this deployment's own public URL (e.g. https://avatar-alex.fly.dev),
     used to build the two tool webhook URLs. Shared by scripts/sync_voice_agent.py.
+
+    Uses ElevenLabs' managed LLM (`config.ELEVENLABS_LLM`), not Custom LLM/OpenRouter:
+    ElevenLabs rejects Custom LLM on agents using an Instant Voice Clone ("Custom LLM is
+    not allowed when using agents with Instant Voice Clones"), discovered via a live 400
+    against a real account. Text chat is unaffected -- still OpenRouter/MODEL.
     """
+    first_name = config.OWNER_NAME.split(" ")[0]
     return {
         "name": f"{config.OWNER_NAME}'s Digital Twin (Voice)",
         "conversation_config": {
             "agent": {
+                "first_message": f"Hey, this is {first_name}'s digital twin -- go ahead, what's on your mind?",
                 "prompt": {
-                    "prompt": knowledge.build_instructions(),
-                    "llm": "custom-llm",
-                    "custom_llm": {
-                        "url": "https://openrouter.ai/api/v1",
-                        "model_id": config.MODEL,
-                        "api_key": {"secret_name": "OPENAI_API_KEY"},
-                    },
+                    "prompt": knowledge.build_instructions() + VOICE_PROMPT_ADDENDUM,
+                    "llm": config.ELEVENLABS_LLM,
                     "tools": [
                         {
                             "type": "webhook",
@@ -131,7 +146,6 @@ def build_agent_config(base_url: str) -> dict:
                                     "properties": {
                                         "conversation_id": {
                                             "type": "string",
-                                            "description": "Our own conversation id for this thread.",
                                             "dynamic_variable": "conversation_id",
                                         },
                                         "question_number": {
@@ -159,7 +173,6 @@ def build_agent_config(base_url: str) -> dict:
                                     "properties": {
                                         "conversation_id": {
                                             "type": "string",
-                                            "description": "Our own conversation id for this thread.",
                                             "dynamic_variable": "conversation_id",
                                         },
                                         "message": {

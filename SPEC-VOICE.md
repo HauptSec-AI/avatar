@@ -76,15 +76,17 @@ rows the admin UI already renders.
 
 - **Voice cloning is already done.** The owner has an existing ElevenLabs cloned voice; this spec
   does not cover the cloning step. The voice is referenced by `ELEVENLABS_VOICE_ID` (see below).
-- **Custom LLM, not ElevenLabs' managed LLM.** The ElevenLabs agent is configured with a "Custom
-  LLM" pointing at OpenRouter, using the *same* `MODEL` and `OPENROUTER_API_KEY` the text chat
-  already uses. This keeps model choice, cost, and behaviour consistent across both channels — the
-  owner sets `MODEL` once, not twice — at the cost of one extra network hop per LLM turn (ElevenLabs
-  → OpenRouter) versus their fully-managed LLM option. ElevenLabs' custom-LLM config takes a Server
-  URL (`https://openrouter.ai/api/v1`), a Model ID (`MODEL`'s value), and an API key stored under a
-  secret literally named `OPENAI_API_KEY` in their dashboard (their custom-LLM feature assumes an
-  OpenAI-compatible surface regardless of the actual provider) — set that secret's value to
-  `OPENROUTER_API_KEY`.
+- **ElevenLabs' managed LLM, not Custom LLM/OpenRouter — a platform constraint, not a preference.**
+  The original plan (see **Q&A** #2 below for the superseded reasoning) was Custom LLM pointed at
+  OpenRouter, matching text chat's `MODEL`. Building against a real account surfaced a hard
+  restriction: ElevenLabs rejects Custom LLM on any agent using an Instant Voice Clone (the exact
+  error: *"Custom LLM is not allowed when using agents with Instant Voice Clones"*) — not documented
+  up front, only discovered via a live 400. Since the owner's voice is an Instant Voice Clone, voice
+  uses one of ElevenLabs' own managed models instead, configured via `ELEVENLABS_LLM` (default
+  `gpt-4o-mini`) — a separate choice from text chat's `MODEL`/`OPENROUTER_API_KEY`, which are
+  unaffected. A Professional Voice Clone would lift this restriction and let voice route through
+  OpenRouter too, if that's ever wanted (re-cloning is a bigger ask than a config change, so this
+  spec doesn't assume it).
 - **One shared system prompt, synced, not hand-copied.** The voice agent must not drift from the
   text agent's persona, knowledge, style, and safety rules. Rather than pasting the prompt into the
   ElevenLabs dashboard once and letting it rot, the backend exposes a small sync step that pushes
@@ -146,10 +148,11 @@ rows the admin UI already renders.
 Be sure to use ElevenLabs' current, idiomatic integration surface: the `@elevenlabs/client` headless
 JS SDK for the browser connection (not the pre-built `<elevenlabs-convai>` widget — it isn't styled
 to the Matrix design system), a server-minted signed connection credential (never expose the raw
-ElevenLabs API key to the browser), the documented "Custom LLM" config for OpenRouter, "server
-tools" (webhook) for `faq_tool`/`push_tool`, and the documented post-call webhook (HMAC-verified via
-the `ElevenLabs-Signature` header) for transcript logging. Confirm current parameter names and
-payload shapes against ElevenLabs' own docs at implementation time — see the naming note above.
+ElevenLabs API key to the browser), `ELEVENLABS_LLM` for the managed-LLM config (Custom LLM isn't
+available on Instant Voice Clone agents — see above), "server tools" (webhook) for
+`faq_tool`/`push_tool`, and the documented post-call webhook (HMAC-verified via the
+`ElevenLabs-Signature` header) for transcript logging. Confirm current parameter names and payload
+shapes against ElevenLabs' own docs at implementation time — see the naming note above.
 
 ### Tech stack decisions
 
@@ -163,12 +166,14 @@ payload shapes against ElevenLabs' own docs at implementation time — see the n
   webhook, the same way `ADMIN_PASSWORD`/session-signing already protect admin routes.
 - `VOICE_MAX_SESSION_SECONDS` (optional, sensible default e.g. `600`) — the abuse-guard session cap
   from **Implementation Decisions**.
+- `ELEVENLABS_LLM` (optional, default `gpt-4o-mini`) — which ElevenLabs-managed model voice uses.
+  Separate from text chat's `MODEL`/`OPENROUTER_API_KEY` (see above); not an OpenRouter identifier.
 
 **Backend additions** (`backend/app/`), following the existing module boundaries in SPEC-AVATAR.md's
 `backend/app/` (`knowledge.py`, `agent_runner.py`, `main.py`, `db.py`):
 - `voice.py` — new module: mints connection credentials from `ELEVENLABS_API_KEY` +
   `ELEVENLABS_AGENT_ID`; the sync function that pushes `knowledge.build_instructions()` plus the
-  custom-LLM/voice config to the ElevenLabs agent-update API; HMAC verification for the post-call
+  managed-LLM/voice config to the ElevenLabs agent-update API; HMAC verification for the post-call
   webhook.
 - New public routes in `main.py`:
   - `POST /api/voice/session` — mints and returns a short-lived connection credential for the
@@ -292,8 +297,8 @@ Building on SPEC-AVATAR.md's setup flow (which must already be complete and pass
    to `.env`.
 3. Run `backend/scripts/sync_voice_agent.py` once to create the ElevenLabs agent (or point
    `ELEVENLABS_AGENT_ID` at one created via their dashboard first, then run the script to configure
-   it) with the custom-LLM/OpenRouter config, the cloned voice, the two tool webhooks, and the
-   synced system prompt. Set `ELEVENLABS_AGENT_ID` in `.env` from the script's output if it created
+   it) with the managed-LLM config (`ELEVENLABS_LLM`), the cloned voice, the two tool webhooks, and
+   the synced system prompt. Set `ELEVENLABS_AGENT_ID` in `.env` from the script's output if it created
    the agent.
 4. Run the Supabase migration in **Tech stack decisions** (the `channel` column and the
    `voice_sessions` table), the same way SPEC-AVATAR.md's setup instructions run the original `messages`
@@ -328,10 +333,14 @@ Clarifications agreed before starting work on this spec:
    dialing into the same call over a Twilio/SIP phone leg via `transfer_to_number`, or a hybrid where
    the owner's admin-typed message gets synthesized (via the same cloned voice) and injected into the
    live audio stream — either is a substantial follow-on project, not a variant of this one.
-2. **LLM routing.** ElevenLabs' "Custom LLM" config, pointed at OpenRouter with the same `MODEL` the
-   text chat uses (owner sets model choice once). ElevenLabs still natively orchestrates STT/TTS/
-   turn-taking; only the LLM completion call leaves their infrastructure, to OpenRouter, same as it
-   already does for text.
+2. **LLM routing — superseded during implementation.** The original decision here was ElevenLabs'
+   "Custom LLM" config pointed at OpenRouter, so voice and text would share one `MODEL`. Building
+   against a real account found that ElevenLabs rejects Custom LLM outright on any agent using an
+   Instant Voice Clone (see **Implementation Decisions** above for the exact error). Since the
+   owner's voice is an Instant Voice Clone, voice uses ElevenLabs' own managed LLM
+   (`ELEVENLABS_LLM`) instead — a real platform constraint discovered live, not a preference change.
+   ElevenLabs still natively orchestrates STT/TTS/turn-taking either way; only the LLM call's
+   destination differs from what was originally planned.
 3. **Where voice lives.** Both a dedicated `/voice` page and an inline launcher on the main chat
    page, sharing one underlying voice module so there's a single implementation to maintain.
 4. **Voice cloning.** Already completed by the owner directly in ElevenLabs; out of scope for this
@@ -348,9 +357,19 @@ Clarifications agreed before starting work on this spec:
    directly — no lookup, no guessed system-variable name. The `voice_sessions` mapping table is
    still needed, but only for the post-call webhook, which genuinely only knows ElevenLabs' id.
 
-Open technical items still to verify against a real ElevenLabs account (not blocking the code, which
-degrades to a clear 503 until `ELEVENLABS_API_KEY`/`ELEVENLABS_AGENT_ID` are set — see **Setup and
-Validation**):
+**Resolved against a real ElevenLabs account** (previously flagged here as unverified):
+- The agent-config payload shape in `voice.build_agent_config()` — proven out via `sync_voice_agent.py`
+  against a real agent, correcting two wrong guesses along the way: the webhook tool schema's
+  per-property object can only set ONE of `description`/`dynamic_variable`/etc, not both; and
+  Custom LLM's API key isn't inline, it references a workspace "secret" by `secret_id` (moot now
+  since voice uses `ELEVENLABS_LLM`, not Custom LLM at all — see **Implementation Decisions**).
+- Whether the SDK's `dynamicVariables` mechanism actually works for tool webhooks — confirmed live:
+  `faq_tool`/`push_tool` receive our real `conversation_id` correctly.
+- Token minting (`mint_conversation_token`) — confirmed live, returns a working LiveKit-backed
+  WebRTC credential.
+
+Still open (not blocking the code, which degrades to a clear 503/502 until voice is configured or an
+ElevenLabs call fails — see **Setup and Validation**):
 - Exact retry/timeout behavior of ElevenLabs' server-tool webhooks (undocumented as of this
   writing) — affects how forgiving `POST /api/voice/tools/*` needs to be, and whether `push_tool`
   could be invoked more than once for one flagged situation.
@@ -359,9 +378,9 @@ Validation**):
   been checked against a real payload yet — `main.py`'s handler reads turn text defensively
   (`message`/`text`/`content`, whichever key is present) for exactly this reason; confirm against a
   live test call and simplify once confirmed.
-- The agent-config payload shape in `voice.build_agent_config()` (the custom-LLM block, the webhook
-  tool schema's `dynamic_variable` field, `request_headers` for the shared auth secret) is built
-  from ElevenLabs' documented Agent API, not yet exercised against a live account — `sync_voice_agent.py`
-  is where this gets proven out or corrected.
+- No API endpoint was found for registering the post-call webhook itself (only for reading current
+  settings, `GET /v1/convai/settings`) — it's a workspace-level setting, registered manually in the
+  ElevenLabs dashboard for now. Worth a closer look later if this needs to be scripted (e.g. for a
+  fresh owner's setup).
 - Confirm current published latency/pricing figures directly against ElevenLabs' pricing page at
   build time rather than any figure quoted secondhand while researching this spec.

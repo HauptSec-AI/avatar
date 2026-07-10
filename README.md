@@ -137,10 +137,13 @@ ELEVENLABS_AGENT_ID=
 ELEVENLABS_VOICE_ID=...
 ELEVENLABS_WEBHOOK_SECRET=a-long-random-string
 VOICE_MAX_SESSION_SECONDS=600
+ELEVENLABS_LLM=gpt-4o-mini
 ```
 
+`ELEVENLABS_LLM` is separate from text chat's `MODEL`/`OPENROUTER_API_KEY` and *not* an OpenRouter identifier — it's one of ElevenLabs' own managed models. Voice can't use Custom LLM/OpenRouter the way text chat does if your voice is an **Instant Voice Clone**: ElevenLabs rejects that combination outright (confirmed against a live account, not just their docs). A **Professional Voice Clone** doesn't have this restriction, if you'd rather keep both channels on the same OpenRouter model later.
+
 1. **Clone your voice.** In the ElevenLabs dashboard, go to **Voices > Add a voice** and create an Instant or Professional Voice Clone (see their docs for sample-audio requirements). Copy the resulting voice id into `ELEVENLABS_VOICE_ID`.
-2. **Get an API key.** In the dashboard, go to **Profile > API Keys**, create one, and add it to `ELEVENLABS_API_KEY`. Leave `ELEVENLABS_AGENT_ID` blank for now — the next step creates it.
+2. **Get an API key.** In the dashboard, go to **Profile > API Keys**, create one with full Conversational AI (`convai`) read+write permissions (a narrowly-scoped key will fail with `missing_permissions` errors), and add it to `ELEVENLABS_API_KEY`. Leave `ELEVENLABS_AGENT_ID` blank for now — the next step creates it.
 3. **Generate a webhook secret** (e.g. `openssl rand -hex 32`) and set `ELEVENLABS_WEBHOOK_SECRET`. This both signs the post-call transcript webhook and authenticates the two tool webhooks (`faq_tool`, `push_tool`) — it's the same value on both ends.
 4. **Run the migration below** (Supabase SQL Editor, same as the `messages` table setup).
 5. **Provision the agent:**
@@ -148,8 +151,8 @@ VOICE_MAX_SESSION_SECONDS=600
    cd backend && uv run python scripts/sync_voice_agent.py --base-url https://your-app.fly.dev
    ```
    (For local-only testing before you've deployed, use an [ngrok](https://ngrok.com) URL instead — ElevenLabs needs to be able to reach your webhook endpoints from the internet.) The first run creates the agent and prints its id; add that to `ELEVENLABS_AGENT_ID` in `.env`, then re-run the script once more.
-6. **Register the post-call webhook.** In the ElevenLabs dashboard, under this agent's settings, add a post-call webhook pointing at `https://your-app.fly.dev/api/voice/webhook`, using `ELEVENLABS_WEBHOOK_SECRET` as the signing secret.
-7. Re-run `sync_voice_agent.py` any time `knowledge/`, `MODEL`, or your deployed URL changes — it's not run automatically, only when you deliberately re-provision.
+6. **Register the post-call webhook.** No API for this one — in the ElevenLabs dashboard, under **Conversational AI > Settings > Webhooks** (a workspace-level setting, not per-agent), add a post-call webhook pointing at `https://your-app.fly.dev/api/voice/webhook`, using `ELEVENLABS_WEBHOOK_SECRET` as the signing secret and the `transcript` event.
+7. Re-run `sync_voice_agent.py` any time `knowledge/`, `ELEVENLABS_LLM`, or your deployed URL changes — it's not run automatically, only when you deliberately re-provision.
 
 **Supabase migration** (SQL Editor, same steps as the `messages` table above):
 

@@ -15,6 +15,7 @@ import time
 import uuid
 
 import pytest
+import requests
 
 from app import agent_runner, config, db, knowledge, voice
 
@@ -71,15 +72,17 @@ def test_verify_webhook_signature_no_secret_configured(monkeypatch):
 def test_build_agent_config_shape(monkeypatch):
     monkeypatch.setattr(config, "ELEVENLABS_VOICE_ID", "voice-123")
     monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
-    monkeypatch.setattr(config, "MODEL", "openai/gpt-5.4-nano")
+    monkeypatch.setattr(config, "ELEVENLABS_LLM", "gpt-4o-mini")
     knowledge.build_instructions.cache_clear()
 
     cfg = voice.build_agent_config("https://example.fly.dev")
 
-    prompt_cfg = cfg["conversation_config"]["agent"]["prompt"]
+    agent_cfg = cfg["conversation_config"]["agent"]
+    prompt_cfg = agent_cfg["prompt"]
     assert config.OWNER_NAME in prompt_cfg["prompt"]
-    assert prompt_cfg["custom_llm"]["url"] == "https://openrouter.ai/api/v1"
-    assert prompt_cfg["custom_llm"]["model_id"] == "openai/gpt-5.4-nano"
+    assert "Markdown" in prompt_cfg["prompt"]  # voice-mode formatting addendum present
+    assert config.OWNER_NAME.split(" ")[0] in agent_cfg["first_message"]
+    assert prompt_cfg["llm"] == "gpt-4o-mini"
     assert cfg["conversation_config"]["tts"]["voice_id"] == "voice-123"
 
     tool_names = {t["name"] for t in prompt_cfg["tools"]}
@@ -130,6 +133,21 @@ def test_voice_session_mints_token_when_configured(client, monkeypatch):
     assert body["token"] == "fake-token"
     assert body["agent_id"] == "agent-123"
     assert body["max_session_seconds"] == config.VOICE_MAX_SESSION_SECONDS
+
+
+def test_voice_session_returns_502_on_elevenlabs_error(client, monkeypatch):
+    """An ElevenLabs API failure (bad key, outage, etc.) is a clean 502, not a raw 500."""
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "test-key")
+    monkeypatch.setattr(config, "ELEVENLABS_AGENT_ID", "agent-123")
+
+    def _boom():
+        raise requests.exceptions.HTTPError("401 Client Error")
+
+    monkeypatch.setattr(voice, "mint_conversation_token", _boom)
+
+    resp = client.post("/api/voice/session", json={"conversation_id": str(uuid.uuid4())})
+    assert resp.status_code == 502
+    assert "try again" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 """Create or update the ElevenLabs voice agent from the current project config.
 
-Run this once to provision the agent, and again any time knowledge/, MODEL, or
-this deployment's public URL changes (see SPEC-VOICE.md "Setup and Validation").
-Not run automatically on every request -- provisioning is a deliberate, occasional
-step, not part of the live request path.
+Run this once to provision the agent, and again any time knowledge/, ELEVENLABS_LLM, or
+this deployment's public URL changes (see SPEC-VOICE.md "Setup and Validation"). Note
+voice uses ELEVENLABS_LLM (an ElevenLabs-managed model), not MODEL/OpenRouter -- Custom
+LLM isn't allowed on agents using an Instant Voice Clone. Not run automatically on every
+request -- provisioning is a deliberate, occasional step, not part of the live request path.
 
 Usage:
     cd backend && uv run python scripts/sync_voice_agent.py --base-url https://avatar-alex.fly.dev
@@ -29,7 +30,7 @@ def main() -> None:
 
     creating = not config.ELEVENLABS_AGENT_ID
     action = "Creating" if creating else "Updating"
-    print(f"{action} ElevenLabs voice agent for {config.OWNER_NAME} (model={config.MODEL})...")
+    print(f"{action} ElevenLabs voice agent for {config.OWNER_NAME} (llm={config.ELEVENLABS_LLM})...")
 
     result = voice.sync_agent(args.base_url)
 
