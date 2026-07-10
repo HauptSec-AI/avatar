@@ -127,3 +127,61 @@ export async function adminPostMessage(id: string, content: string): Promise<Mes
 export async function adminResolveConversation(id: string): Promise<void> {
   await adminFetch(`/admin/conversations/${id}/resolve`, { method: "POST" });
 }
+
+// ---- Voice (SPEC-VOICE.md) ----
+
+export class VoiceSessionError extends Error {}
+
+export interface VoiceSession {
+  token: string;
+  agentId: string;
+  maxSessionSeconds: number;
+}
+
+export async function startVoiceSession(conversationId: string): Promise<VoiceSession> {
+  let response: Response;
+  try {
+    response = await fetch("/api/voice/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: conversationId }),
+    });
+  } catch {
+    throw new VoiceSessionError("Couldn't reach the server. Check your connection and try again.");
+  }
+
+  if (response.status === 429) {
+    const body = await response
+      .json()
+      .catch(() => ({ error: "You're starting voice sessions too quickly. Please wait a moment and try again." }));
+    throw new VoiceSessionError(body.error);
+  }
+  if (response.status === 503) {
+    throw new VoiceSessionError("Voice isn't available right now.");
+  }
+  if (!response.ok) {
+    throw new VoiceSessionError("Couldn't start a voice session. Please try again.");
+  }
+
+  const body = await response.json();
+  return { token: body.token, agentId: body.agent_id, maxSessionSeconds: body.max_session_seconds };
+}
+
+export async function notifyVoiceSessionStarted(
+  conversationId: string,
+  elevenlabsConversationId: string,
+): Promise<void> {
+  try {
+    await fetch("/api/voice/session/started", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        elevenlabs_conversation_id: elevenlabsConversationId,
+      }),
+    });
+  } catch {
+    // Best-effort: if this fails, the post-call transcript just won't have a home to
+    // land in. The live call itself is unaffected either way.
+  }
+}

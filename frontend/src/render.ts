@@ -27,6 +27,11 @@ export function instantTagHtml(row: Message): string {
   return match ? `<span class="instant-tag">instant · Q${match[1]}</span>` : "";
 }
 
+export function channelTagHtml(row: Message): string {
+  if (row.channel !== "voice") return "";
+  return `<span class="channel-tag" title="Spoken during a voice call"><svg class="icon"><use href="/icons.svg#i-mic"/></svg></span>`;
+}
+
 export function renderMessageHTML(row: Message, opts: RenderOptions): string {
   const time = formatTime(row.created_at);
   const bubble = `<div class="bubble">${renderMarkdown(row.content)}</div>`;
@@ -35,7 +40,7 @@ export function renderMessageHTML(row: Message, opts: RenderOptions): string {
     return `<div class="msg msg--visitor" data-id="${row.id}">
       <span class="avatar-initials">${opts.visitorInitials}</span>
       <div class="msg-body">
-        <div class="msg-meta"><span class="msg-time">${time}</span></div>
+        <div class="msg-meta">${channelTagHtml(row)}<span class="msg-time">${time}</span></div>
         ${bubble}
       </div>
     </div>`;
@@ -47,7 +52,7 @@ export function renderMessageHTML(row: Message, opts: RenderOptions): string {
         <span class="spark-badge"><svg class="icon"><use href="/icons.svg#i-spark"/></svg></span>
       </div>
       <div class="msg-body">
-        <div class="msg-meta">${opts.humanTagHtml}<span class="msg-time">${time}</span></div>
+        <div class="msg-meta">${opts.humanTagHtml}${channelTagHtml(row)}<span class="msg-time">${time}</span></div>
         ${bubble}
       </div>
     </div>`;
@@ -56,7 +61,7 @@ export function renderMessageHTML(row: Message, opts: RenderOptions): string {
   return `<div class="msg msg--avatar" data-id="${row.id}">
     <div class="avatar avatar-twin" style="background-image:url('/assets/avatar-robot-round.png')"></div>
     <div class="msg-body">
-      <div class="msg-meta"><span class="msg-name">Avatar</span>${instantTagHtml(row)}<span class="msg-time">${time}</span></div>
+      <div class="msg-meta"><span class="msg-name">Avatar</span>${instantTagHtml(row)}${channelTagHtml(row)}<span class="msg-time">${time}</span></div>
       ${bubble}
     </div>
   </div>`;

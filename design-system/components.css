@@ -169,6 +169,11 @@ body {
 }
 .chip:hover { border-color: var(--blue-line); color: var(--text); }
 
+/* Inline status banner (rate-limit notice, voice permission/connection errors) */
+.banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md); background: var(--yellow-soft); border: 1px solid var(--yellow-line);
+  color: var(--yellow-ink); font-size: var(--text-sm); max-width: var(--container-chat); margin: 0 auto; }
+
 /* keyboard key */
 .kbd {
   display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px;
@@ -332,3 +337,51 @@ body {
 .scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px;
   border: 3px solid transparent; background-clip: content-box; }
 .scroll::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: content-box; }
+
+/* ============================================================================
+   VOICE (SPEC-VOICE.md) — shared by the dedicated /voice page and the inline
+   launcher on the main chat page. Matrix-styled audio visualizer: bars react to
+   input/output frequency data, colored by role (visitor vs avatar) and brightened
+   while that side is actively speaking, echoing the HUD-grid "code trail" motif
+   rather than a generic chatbot waveform.
+   ========================================================================== */
+.voice-panel { display: flex; flex-direction: column; align-items: center; gap: var(--space-5);
+  padding: var(--space-6) var(--space-4); max-width: var(--container-chat); margin: 0 auto; width: 100%; }
+
+.voice-visualizer { display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+  height: 96px; width: 100%; max-width: 420px; }
+.voice-bar { flex: 1; max-width: 6px; min-height: 3px; border-radius: var(--radius-pill);
+  background: var(--text-faint); opacity: 0.3;
+  transition: height 90ms var(--ease-out), opacity var(--dur) var(--ease-out), background var(--dur) var(--ease-out); }
+.voice-panel[data-mode="speaking"] .voice-bar { background: var(--role-avatar); opacity: 0.9; }
+.voice-panel[data-mode="listening"] .voice-bar { background: var(--role-visitor); opacity: 0.7; }
+
+.voice-status { font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--text-faint); display: flex; align-items: center; gap: 8px; }
+.voice-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.voice-panel[data-status="connected"] .voice-status .dot { background: var(--positive); }
+.voice-panel[data-status="connecting"] .voice-status .dot,
+.voice-panel[data-status="disconnecting"] .voice-status .dot {
+  background: var(--yellow-strong); animation: voice-pulse 1.2s infinite ease-in-out; }
+@keyframes voice-pulse { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+
+.voice-captions { width: 100%; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column;
+  gap: var(--space-3); padding: 0 var(--space-2); }
+.voice-caption-line { font-size: var(--text-md); line-height: var(--leading-snug); max-width: 80%; }
+.voice-caption-line--visitor { color: var(--text); text-align: right; margin-left: auto; }
+.voice-caption-line--avatar { color: var(--text); }
+.voice-caption-role { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); color: var(--text-faint); display: block; margin-bottom: 2px; }
+.voice-caption-line--avatar .voice-caption-role { color: var(--role-avatar); }
+
+.voice-tool-status { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono);
+  font-size: var(--text-xs); color: var(--text-faint); }
+.voice-tool-status .icon { width: 14px; height: 14px; color: var(--blue); }
+.voice-tool-status.is-done .icon { color: var(--positive); }
+
+.voice-controls { display: flex; align-items: center; gap: var(--space-4); }
+.voice-mute-btn.is-muted { color: var(--danger); border-color: var(--danger); }
+.voice-end-btn { background: var(--danger); border-color: var(--danger); color: #fff; }
+.voice-end-btn:hover { filter: brightness(1.08); }
+
+.voice-launch-btn { display: inline-flex; align-items: center; gap: 6px; }

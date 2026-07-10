@@ -11,5 +11,8 @@
   "devDependencies": {
     "typescript": "^5.7.3",
     "vite": "^6.3.6"
+  },
+  "dependencies": {
+    "@elevenlabs/client": "^1.15.0"
   }
 }

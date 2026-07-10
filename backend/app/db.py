@@ -2,7 +2,11 @@
 
 Schema (see README.md for the full `create table` statement):
   id, conversation_id, conversation_name, role, content, tool_calls,
-  needs_attention, read, created_at
+  needs_attention, read, channel, created_at
+
+`voice_sessions` (see SPEC-VOICE.md) maps an ElevenLabs conversation onto our own
+conversation_id, so tool webhooks and the post-call transcript webhook -- both of
+which only know ElevenLabs' id -- can find the right thread and update it exactly once.
 """
 
 from functools import lru_cache
@@ -13,6 +17,7 @@ from supabase import Client, create_client
 from . import config
 
 TABLE = "messages"
+VOICE_SESSIONS_TABLE = "voice_sessions"
 
 # How many of the most-recent rows the admin inbox scans to build conversation
 # summaries. One round trip; generous enough for a personal-site volume of traffic.
@@ -32,6 +37,7 @@ def insert_message(
     tool_calls: list[str] | None = None,
     needs_attention: bool = False,
     read: bool = False,
+    channel: str = "text",
 ) -> dict[str, Any]:
     row = {
         "conversation_id": conversation_id,
@@ -44,8 +50,17 @@ def insert_message(
         row["conversation_name"] = conversation_name
     if tool_calls:
         row["tool_calls"] = tool_calls
+    # Only sent when non-default, so this stays backward-compatible with a database
+    # that hasn't run the `channel` migration yet (see SPEC-VOICE.md) -- omitting the
+    # key is valid against both the old schema and the new column's own default.
+    if channel != "text":
+        row["channel"] = channel
     result = get_client().table(TABLE).insert(row).execute()
     return result.data[0]
+
+
+def set_needs_attention(message_id: int) -> None:
+    get_client().table(TABLE).update({"needs_attention": True}).eq("id", message_id).execute()
 
 
 def get_conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
@@ -115,3 +130,71 @@ def list_inbox() -> list[dict[str, Any]]:
         )
     summaries.sort(key=lambda s: s["last_message_at"], reverse=True)
     return summaries
+
+
+# ---------------------------------------------------------------------------
+# Voice (SPEC-VOICE.md): mapping ElevenLabs' own conversation id onto ours.
+# ---------------------------------------------------------------------------
+
+
+def record_voice_session(elevenlabs_conversation_id: str, conversation_id: str) -> None:
+    """Record the pairing right after the browser connects, before any spoken turn.
+
+    Upsert (not insert): the frontend may retry this call, or a reconnect could
+    reuse the same ElevenLabs conversation_id; either way the pairing is idempotent.
+    """
+    get_client().table(VOICE_SESSIONS_TABLE).upsert(
+        {"elevenlabs_conversation_id": elevenlabs_conversation_id, "conversation_id": conversation_id}
+    ).execute()
+
+
+def get_conversation_id_for_voice_session(elevenlabs_conversation_id: str) -> str | None:
+    result = (
+        get_client()
+        .table(VOICE_SESSIONS_TABLE)
+        .select("conversation_id")
+        .eq("elevenlabs_conversation_id", elevenlabs_conversation_id)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0]["conversation_id"] if result.data else None
+
+
+def mark_push_tool_used(conversation_id: str) -> None:
+    """Record that push_tool fired live during this call.
+
+    The Pushover ping itself already went out in real time (same as text chat);
+    this just makes sure the conversation's needs_attention flag gets set once the
+    transcript is written, without needing a synthetic row that would otherwise
+    show up *before* the visitor turns that actually caused the flag.
+
+    Keyed by our own conversation_id (not ElevenLabs') because that's what the tool
+    webhook has -- see VoicePushToolRequest. Scoped to transcript_saved=false so it
+    lands on the currently in-progress call's row, not an already-claimed past one.
+    """
+    get_client().table(VOICE_SESSIONS_TABLE).update({"push_tool_used": True}).eq(
+        "conversation_id", conversation_id
+    ).eq("transcript_saved", False).execute()
+
+
+def claim_transcript_write(elevenlabs_conversation_id: str) -> dict[str, Any] | None:
+    """Atomically claim the right to write this call's transcript, exactly once.
+
+    The post-call webhook delivers the *complete* transcript (not deltas), and
+    ElevenLabs may redeliver it. This flips transcript_saved False -> True and
+    returns {"conversation_id", "push_tool_used"} only for the caller that wins the
+    race; a redelivery (or a concurrent duplicate) finds transcript_saved already
+    True and gets None back, so it skips the insert instead of duplicating rows.
+    """
+    result = (
+        get_client()
+        .table(VOICE_SESSIONS_TABLE)
+        .update({"transcript_saved": True})
+        .eq("elevenlabs_conversation_id", elevenlabs_conversation_id)
+        .eq("transcript_saved", False)
+        .execute()
+    )
+    if not result.data:
+        return None
+    row = result.data[0]
+    return {"conversation_id": row["conversation_id"], "push_tool_used": row["push_tool_used"]}

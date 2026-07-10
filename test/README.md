@@ -1,6 +1,6 @@
 # Avatar — Test Plans
 
-Three layers, per SPEC.md "Testing": backend unit tests, Playwright frontend tests, and a Docker
+Three layers, per SPEC-AVATAR.md "Testing": backend unit tests, Playwright frontend tests, and a Docker
 end-to-end pass. All three ran against real infrastructure (Supabase, OpenRouter with the cheap
 `openai/gpt-5.4-nano` model, and Pushover) — nothing here is mocked at the infra level except where
 noted. Test conversations and screenshots are deleted after a full pass (see "Cleanup" below).

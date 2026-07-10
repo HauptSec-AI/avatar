@@ -1,4 +1,5 @@
 export type Role = "visitor" | "avatar" | "human";
+export type Channel = "text" | "voice";
 
 export interface Message {
   id: number;
@@ -9,6 +10,7 @@ export interface Message {
   tool_calls: string[] | null;
   needs_attention: boolean;
   read: boolean;
+  channel?: Channel;
   created_at: string;
 }
 

@@ -1,17 +1,27 @@
-"""FastAPI app: visitor chat API (SSE), admin API, and static UI serving."""
+"""FastAPI app: visitor chat API (SSE), admin API, voice API, and static UI serving."""
 
+import asyncio
 import json
 import logging
 import uuid
 
+import requests
 from agents import Runner
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openai.types.responses import ResponseTextDeltaEvent
 
-from . import agent_runner, config, db, knowledge, ratelimit, security, transcript
-from .schemas import AdminLoginRequest, AdminMessageRequest, ChatRequest
+from . import agent_runner, config, db, knowledge, ratelimit, security, transcript, voice
+from .schemas import (
+    AdminLoginRequest,
+    AdminMessageRequest,
+    ChatRequest,
+    VoiceFaqToolRequest,
+    VoicePushToolRequest,
+    VoiceSessionRequest,
+    VoiceSessionStartedRequest,
+)
 
 logger = logging.getLogger("avatar")
 
@@ -130,6 +140,111 @@ async def chat(payload: ChatRequest):
 
 
 # ---------------------------------------------------------------------------
+# Voice API (SPEC-VOICE.md) -- ElevenLabs owns the real-time STT/LLM/TTS loop;
+# these routes only mint a connection credential, receive tool-call webhooks, and
+# log the finished transcript. None of them sit in the per-token hot path.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/voice/session")
+async def voice_session(payload: VoiceSessionRequest):
+    _validate_conversation_id(payload.conversation_id)
+    if not ratelimit.allow_voice_session(payload.conversation_id):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "You're starting voice sessions too quickly. Please wait a moment and try again."
+            },
+        )
+    try:
+        token = voice.mint_conversation_token()
+    except voice.VoiceNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except requests.RequestException:
+        logger.exception("Failed to mint an ElevenLabs conversation token")
+        raise HTTPException(
+            status_code=502, detail="Couldn't reach the voice service. Please try again in a moment."
+        ) from None
+    return {
+        "token": token,
+        "agent_id": config.ELEVENLABS_AGENT_ID,
+        "max_session_seconds": config.VOICE_MAX_SESSION_SECONDS,
+    }
+
+
+@app.post("/api/voice/session/started")
+async def voice_session_started(payload: VoiceSessionStartedRequest):
+    _validate_conversation_id(payload.conversation_id)
+    db.record_voice_session(payload.elevenlabs_conversation_id, payload.conversation_id)
+    return {"ok": True}
+
+
+@app.post("/api/voice/tools/faq", dependencies=[Depends(security.require_voice_tool_secret)])
+async def voice_tool_faq(payload: VoiceFaqToolRequest):
+    faq = knowledge.find_faq(payload.question_number)
+    if not faq:
+        return {"result": "That question number was not found in the FAQ."}
+    return {"result": knowledge.format_faq_answer(faq)}
+
+
+@app.post("/api/voice/tools/push", dependencies=[Depends(security.require_voice_tool_secret)])
+async def voice_tool_push(payload: VoicePushToolRequest):
+    result = await asyncio.to_thread(agent_runner.send_pushover_notification, payload.message)
+    db.mark_push_tool_used(payload.conversation_id)
+    return {"result": result}
+
+
+@app.post("/api/voice/webhook")
+async def voice_webhook(request: Request):
+    raw_body = await request.body()
+    signature_header = request.headers.get("elevenlabs-signature")
+    if not voice.verify_webhook_signature(raw_body, signature_header):
+        # Signature format hasn't been exercised against a real payload yet (see
+        # SPEC-VOICE.md's open items) -- log what we actually received so a live
+        # failure is diagnosable without another debug-script round trip.
+        logger.warning(
+            "Voice webhook signature check failed. header=%r all_headers=%r body_preview=%r",
+            signature_header,
+            dict(request.headers),
+            raw_body[:500],
+        )
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    payload = json.loads(raw_body)
+    if payload.get("type") != "post_call_transcription":
+        return {"ok": True, "skipped": "not a post_call_transcription event"}
+
+    data = payload.get("data", {})
+    elevenlabs_conversation_id = data.get("conversation_id")
+    if not elevenlabs_conversation_id:
+        raise HTTPException(status_code=400, detail="Missing conversation_id in webhook payload")
+
+    claim = db.claim_transcript_write(elevenlabs_conversation_id)
+    if claim is None:
+        # Either an unknown session, or (far more likely) a redelivery of a transcript
+        # we already saved -- either way, 200 so ElevenLabs doesn't keep retrying.
+        return {"ok": True, "skipped": "already saved or unknown session"}
+
+    conversation_id = claim["conversation_id"]
+    transcript_turns = data.get("transcript", [])
+    last_avatar_row = None
+    for turn in transcript_turns:
+        turn_role = turn.get("role")
+        text = turn.get("message") or turn.get("text") or turn.get("content") or ""
+        if not text:
+            continue
+        role = "visitor" if turn_role == "user" else "avatar"
+        row = db.insert_message(conversation_id, role, text, channel="voice")
+        if role == "avatar":
+            last_avatar_row = row
+
+    if claim["push_tool_used"] and last_avatar_row:
+        db.set_needs_attention(last_avatar_row["id"])
+
+    return {"ok": True, "messages_saved": len(transcript_turns)}
+
+
+# ---------------------------------------------------------------------------
 # Admin API
 # ---------------------------------------------------------------------------
 
@@ -209,6 +324,10 @@ if config.FRONTEND_DIST.exists():
     @app.get("/admin", include_in_schema=False)
     async def serve_admin():
         return FileResponse(config.FRONTEND_DIST / "admin.html")
+
+    @app.get("/voice", include_in_schema=False)
+    async def serve_voice():
+        return FileResponse(config.FRONTEND_DIST / "voice.html")
 
     @app.get("/{filename}", include_in_schema=False)
     async def serve_public_file(filename: str):

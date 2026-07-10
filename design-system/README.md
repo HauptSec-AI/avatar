@@ -25,7 +25,7 @@ primary actions only · no gradients, no purple wash, no left-edge accent bars, 
 
 ## Behaviour lives in two places
 - **This folder** → look & feel, components, the two screens, interaction detail.
-- **`SPEC.md`** (project root) → product behaviour & backend (Agents SDK, OpenRouter, Supabase,
+- **`SPEC-AVATAR.md`** (project root) → product behaviour & backend (Agents SDK, OpenRouter, Supabase,
   auth, streaming/polling, tools).
 
 See `SKILL.md` for the full handoff and an acceptance checklist.
