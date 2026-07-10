@@ -14,12 +14,18 @@ Under the hood it's a FastAPI + vanilla TypeScript app built with [Claude Code](
 
 ## Setup instructions
 
-All secrets live in a single `.env` file in the project root. By the end of this section it should contain:
+All secrets live in a single `.env` file in the project root. Start by copying the template:
+
+```
+cp .env.example .env
+```
+
+Then fill in your own values as you work through this section. By the end, `.env` should contain:
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-...
 MODEL=openai/gpt-5.4-nano
-OWNER_NAME=Alex Haupt
+OWNER_NAME=Your Name
 ADMIN_PASSWORD=your-chosen-admin-password
 PUSHOVER_USER=...
 PUSHOVER_TOKEN=...
@@ -133,7 +139,7 @@ That's it - once all the values above are in `.env`, the setup is complete.
 
 The base app (above) is text-only. [`SPEC-VOICE.md`](SPEC-VOICE.md) adds an optional voice channel — visitors can talk to the twin, in your own cloned voice, via [ElevenLabs' Agents platform](https://elevenlabs.io) (formerly "Conversational AI"). Skip this whole section if you only want text chat; nothing else in the app depends on it.
 
-Add to `.env`:
+Fill in these (already scaffolded blank in `.env.example`):
 
 ```
 ELEVENLABS_API_KEY=...
