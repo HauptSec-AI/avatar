@@ -1,6 +1,6 @@
 # UX Flows & Interaction Contracts
 
-The parts of Avatar that don't show up in a screenshot. Pair with `SPEC.md` for backend behaviour.
+The parts of Avatar that don't show up in a screenshot. Pair with `SPEC-AVATAR.md` for backend behaviour.
 
 ---
 

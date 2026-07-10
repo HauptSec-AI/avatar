@@ -88,7 +88,7 @@ flyctl status -a "$APP" >/dev/null 2>&1 || { echo "Creating $APP..."; flyctl app
 
 # 2. Stage secrets from .env (surrounding quotes stripped). PORT/COOKIE_SECURE are
 #    set in fly.toml [env], not here. --stage applies them on the next deploy (one rollout).
-KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET"
+KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_VOICE_ID ELEVENLABS_WEBHOOK_SECRET VOICE_MAX_SESSION_SECONDS"
 args=()
 for k in $KEYS; do
   v=$(grep -E "^${k}=" .env | head -1 | cut -d= -f2-)
@@ -116,9 +116,10 @@ Set in `scripts/fly.toml` `[env]` (non-sensitive, committed):
 
 Set as **Fly secrets** (sensitive, pulled from `.env` by `deploy.sh`):
 
-`OPENROUTER_API_KEY`, `MODEL`, `OWNER_NAME`, `ADMIN_PASSWORD`, `PUSHOVER_USER`, `PUSHOVER_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION_SECRET`.
+`OPENROUTER_API_KEY`, `MODEL`, `OWNER_NAME`, `ADMIN_PASSWORD`, `PUSHOVER_USER`, `PUSHOVER_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION_SECRET`, and (if voice is set up — see [SPEC-VOICE.md](SPEC-VOICE.md)) `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `VOICE_MAX_SESSION_SECONDS`.
 
 Notes:
+- **Voice secrets** are staged the same way but are optional — `deploy.sh` skips any empty value, so a deployment with no voice setup is unaffected. After deploying, run `scripts/sync_voice_agent.py --base-url https://<your-app>.fly.dev` to point the ElevenLabs agent's tool webhooks at the live URL, and register `https://<your-app>.fly.dev/api/voice/webhook` as the post-call webhook in the ElevenLabs dashboard.
 - **`SESSION_SECRET`** (now in `.env`) signs the admin session cookie. Setting it explicitly means rotating `ADMIN_PASSWORD` later won't unexpectedly invalidate the session-secret derivation. Use a long random value.
 - **`MODEL`** is whatever is in `.env`. For production, set `MODEL=openai/gpt-5.4-mini` before deploying (this is what the reference deployment runs); `openai/gpt-5.4-nano` is the cheaper dev/test model and the code default. You can change it later with `fly secrets set -a <your-app> MODEL=openai/gpt-5.4-mini`.
 - Secrets can be set/changed any time: `fly secrets set -a avatar-alex KEY=value` (triggers a rolling restart). View names with `fly secrets list -a avatar-alex` (values are never shown).
@@ -198,7 +199,7 @@ Mapping the app to your own domain is optional — `https://<your-app>.fly.dev` 
 
 3. Watch issuance with `fly certs check avatar.<yourdomain> -a <your-app>`. Once DNS propagates, Fly issues the cert automatically and the app is served at `https://avatar.<yourdomain>` over HTTPS.
 
-**Embedding.** A ready-to-paste snippet is in `scripts/wordpress-embed.html` (a WordPress "Custom HTML" block): it pins the app full-bleed just below the site nav, overrides the theme's content-column max-width, guards against horizontal overflow on narrow screens, and forwards `?q=N` from the host page into the iframe. Change two values for your own site — the `BASE` constant (your subdomain, e.g. `https://avatar.<yourdomain>`) and the iframe `title` (your own name). See SPEC.md "Tech stack decisions" for the `frame-ancestors` guidance.
+**Embedding.** A ready-to-paste snippet is in `scripts/wordpress-embed.html` (a WordPress "Custom HTML" block): it pins the app full-bleed just below the site nav, overrides the theme's content-column max-width, guards against horizontal overflow on narrow screens, and forwards `?q=N` from the host page into the iframe. Change two values for your own site — the `BASE` constant (your subdomain, e.g. `https://avatar.<yourdomain>`) and the iframe `title` (your own name). See SPEC-AVATAR.md "Tech stack decisions" for the `frame-ancestors` guidance.
 
 ## 8. Operations
 

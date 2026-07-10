@@ -109,7 +109,7 @@ The image in knowledge/pic.jpg should be used for the Avatar icon for the Human,
 
 ## Design System
 
-A complete, build-ready visual and interaction system has been provided in the `design-system/` directory (produced by the sister product Claude Design). It pairs with this SPEC. The split is explicit: **SPEC.md governs behaviour and the backend; `design-system/` governs look and feel.** When the two disagree, SPEC wins on behaviour, the design system wins on appearance.
+A complete, build-ready visual and interaction system has been provided in the `design-system/` directory (produced by the sister product Claude Design). It pairs with this SPEC. The split is explicit: **SPEC-AVATAR.md governs behaviour and the backend; `design-system/` governs look and feel.** When the two disagree, SPEC wins on behaviour, the design system wins on appearance.
 
 ### Structure of `design-system/`
 

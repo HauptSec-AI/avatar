@@ -4,13 +4,13 @@
 > (Claude Code) how to turn this design system into the real product UI.
 >
 > **Source of truth split:**
-> - `SPEC.md` (project root) governs *what the product does* and the *backend* — Agents SDK,
+> - `SPEC-AVATAR.md` (project root) governs *what the product does* and the *backend* — Agents SDK,
 >   OpenRouter, Supabase schema, auth, streaming/polling, tools. Defer to it for all behaviour.
 > - **This folder** (`avatar-design-system/`) governs *how the product looks and feels* — tokens,
 >   components, icons, the avatar identity, the two screens, and the interaction details that
 >   make the UI correct. Defer to it for all visual/UX decisions.
 >
-> When the two ever seem to disagree, SPEC.md wins on behaviour, this system wins on appearance.
+> When the two ever seem to disagree, SPEC-AVATAR.md wins on behaviour, this system wins on appearance.
 
 ---
 

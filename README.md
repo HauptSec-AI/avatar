@@ -4,9 +4,9 @@ Interact with a digital version of you
 
 ## Introduction
 
-This project is a web application for visitors to the site to interact with a Digital Twin of you. During their interaction, you can personally jump in (via an admin panel) and engage with the visitors direcly.
+This project is a web application for visitors to the site to interact with a Digital Twin of you. During their interaction, you can personally jump in (via an admin panel) and engage with the visitors direcly. An optional voice channel — visitors can talk to the twin, in your own cloned voice — is layered on top via [ElevenLabs](https://elevenlabs.io); see [SPEC-VOICE.md](SPEC-VOICE.md).
 
-This repo is a working example — Alex Haupt's own Digital Twin, built with [Claude Code](https://claude.com/claude-code) from the specification in [SPEC.md](SPEC.md). It's also a reusable starting point: the spec, the design system (`design-system/`), and the app itself are all here, so if you want to build your own twin, fork this repo, work through **Setup instructions** and **Personalize the twin** below to make it yours, then open the folder in Claude Code and ask it to (re)build the app from `SPEC.md`.
+This repo is a working example — Alex Haupt's own Digital Twin, built with [Claude Code](https://claude.com/claude-code) from the specification in [SPEC-AVATAR.md](SPEC-AVATAR.md). It's also a reusable starting point: the spec, the design system (`design-system/`), and the app itself are all here, so if you want to build your own twin, fork this repo, work through **Setup instructions** and **Personalize the twin** below to make it yours, then open the folder in Claude Code and ask it to (re)build the app from `SPEC-AVATAR.md`.
 
 ## Setup instructions
 
@@ -125,6 +125,53 @@ Conversations are stored in a single Postgres table in Supabase. Follow these st
 
 That's it - once all the values above are in `.env`, the setup is complete.
 
+### Voice (optional)
+
+The base app (above) is text-only. [`SPEC-VOICE.md`](SPEC-VOICE.md) adds an optional voice channel — visitors can talk to the twin, in your own cloned voice, via [ElevenLabs' Agents platform](https://elevenlabs.io) (formerly "Conversational AI"). Skip this whole section if you only want text chat; nothing else in the app depends on it.
+
+Add to `.env`:
+
+```
+ELEVENLABS_API_KEY=...
+ELEVENLABS_AGENT_ID=
+ELEVENLABS_VOICE_ID=...
+ELEVENLABS_WEBHOOK_SECRET=a-long-random-string
+VOICE_MAX_SESSION_SECONDS=600
+```
+
+1. **Clone your voice.** In the ElevenLabs dashboard, go to **Voices > Add a voice** and create an Instant or Professional Voice Clone (see their docs for sample-audio requirements). Copy the resulting voice id into `ELEVENLABS_VOICE_ID`.
+2. **Get an API key.** In the dashboard, go to **Profile > API Keys**, create one, and add it to `ELEVENLABS_API_KEY`. Leave `ELEVENLABS_AGENT_ID` blank for now — the next step creates it.
+3. **Generate a webhook secret** (e.g. `openssl rand -hex 32`) and set `ELEVENLABS_WEBHOOK_SECRET`. This both signs the post-call transcript webhook and authenticates the two tool webhooks (`faq_tool`, `push_tool`) — it's the same value on both ends.
+4. **Run the migration below** (Supabase SQL Editor, same as the `messages` table setup).
+5. **Provision the agent:**
+   ```
+   cd backend && uv run python scripts/sync_voice_agent.py --base-url https://your-app.fly.dev
+   ```
+   (For local-only testing before you've deployed, use an [ngrok](https://ngrok.com) URL instead — ElevenLabs needs to be able to reach your webhook endpoints from the internet.) The first run creates the agent and prints its id; add that to `ELEVENLABS_AGENT_ID` in `.env`, then re-run the script once more.
+6. **Register the post-call webhook.** In the ElevenLabs dashboard, under this agent's settings, add a post-call webhook pointing at `https://your-app.fly.dev/api/voice/webhook`, using `ELEVENLABS_WEBHOOK_SECRET` as the signing secret.
+7. Re-run `sync_voice_agent.py` any time `knowledge/`, `MODEL`, or your deployed URL changes — it's not run automatically, only when you deliberately re-provision.
+
+**Supabase migration** (SQL Editor, same steps as the `messages` table above):
+
+```sql
+alter table public.messages
+  add column channel text not null default 'text' check (channel in ('text', 'voice'));
+
+create table public.voice_sessions (
+  elevenlabs_conversation_id text primary key,
+  conversation_id             uuid not null,
+  started_at                  timestamptz not null default now(),
+  transcript_saved            boolean not null default false,
+  push_tool_used              boolean not null default false
+);
+
+grant select, insert, update, delete on public.voice_sessions to service_role;
+```
+
+Click **Run without RLS** on this one too, for the same reason as the `messages` table (backend-only access via the secret key).
+
+Once configured, a visitor can reach voice from the dedicated `/voice` page or the mic button next to the composer on the main chat page — both share the same conversation thread as text chat, and a spoken conversation shows up in `/admin` exactly like a typed one, with a small mic badge on the turns that were spoken.
+
 ### Validate the setup
 
 Before running the app, confirm Supabase is reachable and writable with the connectivity test:
@@ -134,6 +181,12 @@ cd backend && uv run pytest tests/test_supabase_connection.py -v
 ```
 
 All tests must pass. They check that `SUPABASE_URL` / `SUPABASE_KEY` are present and correctly formatted, that the `messages` table is reachable through the Data API, and that a row can be inserted and deleted (with the expected columns, including `needs_attention`, `read`, and `tool_calls`). If a test fails, re-check the table SQL and the URL/key steps above.
+
+`backend/tests/test_voice.py` has tests marked `voice_live` that need the `channel`/`voice_sessions` migration applied (a plain `pytest` run skips nothing by default, but a fresh clone that hasn't run the migration yet should pass `-m "not voice_live"` to skip them). Once you've set up voice and run the migration, run the full voice suite with:
+
+```
+cd backend && uv run pytest tests/test_voice.py -v
+```
 
 ## Personalize the twin (the `knowledge/` folder)
 
