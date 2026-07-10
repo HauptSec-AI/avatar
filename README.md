@@ -1,8 +1,8 @@
 # Avatar
 
-<p align="center"><img src="docs/screenshot.png" alt="Avatar visitor chat screenshot" width="720"></p>
+Interact with a digital version of me
 
-Interact with a digital version of you
+<p align="center"><img src="docs/screenshot.png" alt="Avatar visitor chat screenshot" width="720"></p>
 
 ## Introduction
 
