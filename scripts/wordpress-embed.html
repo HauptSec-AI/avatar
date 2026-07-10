@@ -1,0 +1,66 @@
+<!--
+  Avatar embed snippet - paste into a WordPress "Custom HTML" block on the page
+  you want the digital twin to appear on.
+
+  Before pasting:
+  1. Set BASE below to your Avatar app's URL (prefer a first-party subdomain,
+     e.g. "https://avatar.yourdomain.com", so the "Keep chat" cookie sticks -
+     see the custom-domain section of DEPLOY.md. "https://<your-app>.fly.dev"
+     also works, just without first-party cookies in the iframe).
+  2. Set the iframe's `title` attribute to your own name.
+
+  What this does:
+  - Renders the app full-bleed, edge to edge, just below the page content that
+    comes before this block (e.g. your site nav/header).
+  - Overrides common theme content-column max-width constraints so the iframe
+    isn't squeezed into a narrow article column.
+  - Guards against horizontal overflow / scrollbars on narrow (mobile) screens.
+  - Forwards this page's own "?q=N" query param onto the iframe, so a link like
+    "https://yoursite.com/avatar-page?q=2" opens the page and the embedded
+    Avatar immediately answers Q2 (see SPEC.md - "?q=" deep links).
+-->
+<style>
+  #avatar-embed-wrap {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  #avatar-embed-frame {
+    display: block;
+    width: 100%;
+    height: 85vh;
+    min-height: 640px;
+    border: 0;
+  }
+  /* Common theme content-column constraints, overridden for this block only. */
+  .entry-content #avatar-embed-wrap,
+  .site-content #avatar-embed-wrap,
+  article #avatar-embed-wrap {
+    max-width: 100vw !important;
+  }
+</style>
+
+<div id="avatar-embed-wrap">
+  <iframe
+    id="avatar-embed-frame"
+    title="Chat with my digital twin"
+    src="https://<your-app>.fly.dev"
+    loading="lazy"
+    allow="clipboard-write"
+  ></iframe>
+</div>
+
+<script>
+  (function () {
+    var BASE = "https://<your-app>.fly.dev"; // <-- set to your app's URL
+    var frame = document.getElementById("avatar-embed-frame");
+    var hostParams = new URLSearchParams(window.location.search);
+    var q = hostParams.get("q");
+    frame.src = q ? BASE + "/?q=" + encodeURIComponent(q) : BASE + "/";
+  })();
+</script>

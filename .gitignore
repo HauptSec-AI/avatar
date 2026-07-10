@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python (backend/)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node (frontend/, test/)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Playwright test artifacts
+test/test-results/
+test/playwright-report/
+test/screenshots/
+
+# Claude Code local session state
+.claude/
+
+# macOS
+.DS_Store

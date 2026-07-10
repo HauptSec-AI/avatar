@@ -1,0 +1,216 @@
+/* ============================================================================
+   AVATAR — Design Tokens (single source of truth)
+   Digital Twin platform. Dark mode is the hero; light is fully supported.
+   Theme is controlled by [data-theme="dark"|"light"] on <html> or any wrapper.
+   ----------------------------------------------------------------------------
+   Brand palette (fixed, from SPEC):
+     Yellow  #ecad0a  — the "spark": accent lines, highlights, human-in-the-loop
+     Blue    #209dd7  — primary identity: links, key sections, the Avatar
+     Purple  #753991  — RESERVED for primary actions (submit) only
+     Navy    #032147  — structure / headings (and the dark canvas itself)
+     Gray    #888888  — supporting text, labels
+   Rules: no gradients in UI chrome, no purple overuse, no left-border accent
+   panels, no emoji. Blue-led, yellow as the spark.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand constants (hue anchors — do not theme these) ---- */
+  --brand-yellow: #ecad0a;
+  --brand-blue:   #209dd7;
+  --brand-purple: #753991;
+  --brand-navy:   #032147;
+  --brand-gray:   #888888;
+
+  /* ---- Typography families ---- */
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ---- Type scale (root 16px) ---- */
+  --text-2xs: 0.6875rem; /* 11 — mono micro labels */
+  --text-xs:  0.75rem;   /* 12 */
+  --text-sm:  0.8125rem; /* 13 */
+  --text-base:0.9375rem; /* 15 — UI body default */
+  --text-md:  1.0625rem; /* 17 — message body */
+  --text-lg:  1.375rem;  /* 22 */
+  --text-xl:  1.875rem;  /* 30 */
+  --text-2xl: 2.5rem;    /* 40 */
+  --text-3xl: 3.5rem;    /* 56 */
+  --text-4xl: 4.75rem;   /* 76 — display */
+
+  --leading-tight: 1.08;
+  --leading-snug: 1.28;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.62;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-caps: 0.14em;  /* mono eyebrow labels */
+
+  /* ---- Spacing (4px base) ---- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 112px;
+
+  /* ---- Radius (sharp, modern — crisp but not hard) ---- */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 0.78, 0.24, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 360ms;
+
+  /* ---- Layout ---- */
+  --container-chat: 760px;     /* visitor conversation column */
+  --sidebar-w: 340px;          /* admin inbox sidebar */
+  --header-h: 64px;
+}
+
+/* ============================================================================
+   DARK THEME — the hero. Matrix palette:
+     Vampire Black #0D0208 — dominant dark background
+     Dark Green    #003B00 — deep shadow tint
+     Islam Green   #008F11 — mid-tone code trails
+     Erin          #00FF41 — bright foreground glow
+   Role identity stays within this green family (no separate hue per role):
+   visitor = Islam Green (mid, understated), avatar = Erin (bright), human =
+   Erin + a stronger radiant glow — the glow intensity carries the distinction
+   that hue used to.
+   ========================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --surface-0: #0D0208;   /* app canvas — Vampire Black */
+  --surface-1: #091405;   /* panels, cards, sidebar */
+  --surface-2: #003B00;   /* raised: inputs, hover, message bubbles — Dark Green */
+  --surface-3: #0c4a08;   /* highest: menus, active row, popovers */
+  --surface-sunken: #050103; /* wells, code, conversation backdrop */
+
+  /* Borders & hairlines */
+  --border: #163a12;
+  --border-strong: #008F11;  /* Islam Green — code-trail lines */
+  --hairline: rgba(0,255,65,0.07);
+
+  /* Text */
+  --text: #cdf5d6;        /* primary — soft phosphor green-white */
+  --text-muted: #6fae7a;  /* secondary */
+  --text-faint: #47724d;  /* tertiary / labels */
+  --text-on-accent: #04170a;  /* dark text/icons on bright Erin backgrounds */
+  --text-on-yellow: #04170a;
+
+  /* "Blue" slot — system accent / links / visitor identity → Islam Green */
+  --blue: #17b83a;
+  --blue-strong: #008F11;
+  --blue-ink: #b7f5c2;        /* readable green text on dark */
+  --blue-soft: rgba(0, 143, 17, 0.16);
+  --blue-line: rgba(0, 143, 17, 0.42);
+
+  /* "Yellow" slot — the spark / human-in-the-loop / attention / focus → Erin */
+  --yellow: #33ff70;
+  --yellow-strong: #00FF41;
+  --yellow-ink: #8dffb0;
+  --yellow-soft: rgba(0, 255, 65, 0.14);
+  --yellow-line: rgba(0, 255, 65, 0.45);
+
+  /* "Purple" slot — primary actions ONLY → Erin, the brightest glow */
+  --purple: #00e63a;
+  --purple-strong: #00FF41;
+  --purple-hover: #5dff85;
+  --purple-soft: rgba(0, 255, 65, 0.18);
+
+  /* Semantic */
+  --focus-ring: rgba(0, 255, 65, 0.55);   /* Erin glow focus */
+  --danger: #e0654f;
+  --positive: #1fcb4a;     /* calm mid-green for "read"/synced */
+
+  /* Role identity (visitor / avatar / human) — same green family, distinguished
+     by brightness and (for human) glow strength rather than hue */
+  --role-visitor: var(--blue-strong);   /* Islam Green */
+  --role-avatar: #00FF41;               /* Erin */
+  --role-human: var(--yellow-strong);   /* Erin, paired with the stronger glow below */
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.4);
+  --shadow-lg: 0 24px 60px -16px rgba(0,0,0,0.7), 0 6px 16px rgba(0,0,0,0.45);
+  --glow-blue: 0 0 0 1px var(--blue-line), 0 8px 28px -10px rgba(0,143,17,0.35);
+  --glow-yellow: 0 0 0 1px var(--yellow-line), 0 0 28px 2px rgba(0,255,65,0.5);
+
+  /* Decorative grid (HUD texture) — the "code trails" */
+  --grid-line: rgba(0, 255, 65, 0.05);
+}
+
+/* ============================================================================
+   LIGHT THEME — fully designed. Cool off-white, low chroma.
+   ========================================================================== */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-0: #f3f6fb;
+  --surface-1: #ffffff;
+  --surface-2: #eef3f9;
+  --surface-3: #e3ecf5;
+  --surface-sunken: #eaf0f7;
+
+  --border: #d9e2ed;
+  --border-strong: #bdccdc;
+  --hairline: rgba(3, 33, 71, 0.08);
+
+  --text: #0b2138;        /* near navy */
+  --text-muted: #4c6076;
+  --text-faint: #7d92a6;  /* ≈ spec gray */
+  --text-on-accent: #ffffff;
+  --text-on-yellow: #1a1303;
+
+  --blue: #1487c1;
+  --blue-strong: #209dd7;
+  --blue-ink: #136491;
+  --blue-soft: rgba(32, 157, 215, 0.10);
+  --blue-line: rgba(32, 157, 215, 0.35);
+
+  --yellow: #ecad0a;
+  --yellow-strong: #d39c07;
+  --yellow-ink: #8a6404;
+  --yellow-soft: rgba(236, 173, 10, 0.16);
+  --yellow-line: rgba(236, 173, 10, 0.55);
+
+  --purple: #753991;
+  --purple-strong: #6a3384;
+  --purple-hover: #82449f;
+  --purple-soft: rgba(117, 57, 145, 0.09);
+
+  --focus-ring: rgba(236, 173, 10, 0.6);
+  --danger: #c2492f;
+  --positive: #1689c2;
+
+  --role-visitor: var(--blue-strong);
+  --role-avatar: #1b95a6;
+  --role-human: var(--yellow-strong);
+
+  --shadow-sm: 0 1px 2px rgba(11, 33, 56, 0.06);
+  --shadow-md: 0 10px 28px -12px rgba(11, 33, 56, 0.18), 0 2px 6px rgba(11,33,56,0.06);
+  --shadow-lg: 0 28px 64px -20px rgba(11, 33, 56, 0.26), 0 6px 16px rgba(11,33,56,0.08);
+  --glow-blue: 0 0 0 1px var(--blue-line), 0 10px 30px -12px rgba(32,157,215,0.30);
+  --glow-yellow: 0 0 0 1px var(--yellow-line), 0 10px 30px -12px rgba(236,173,10,0.28);
+
+  --grid-line: rgba(3, 33, 71, 0.035);
+}
