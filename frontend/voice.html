@@ -9,7 +9,7 @@
     if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   })();
 </script>
-<title>Avatar</title>
+<title>Talk to my digital twin — Avatar</title>
 <link rel="icon" href="/assets/avatar-robot-round.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,44 +52,20 @@
   </div>
 </header>
 
-<main class="chat">
-  <div class="convo scroll" id="convo">
-    <div class="convo-inner" id="convoInner">
-
-      <div class="intro" id="intro">
-        <div class="avatar avatar-twin" style="background-image:url('/assets/avatar-robot-round.png')"></div>
-        <h1 id="introHeading">Meet my <em>digital twin</em>.</h1>
-        <p id="introBody">Ask anything — and I might just chime in myself.</p>
-        <div class="suggest-row" id="suggestRow"></div>
-      </div>
-
-    </div>
+<main class="voice-main">
+  <div class="voice-hero" id="voiceHero">
+    <div class="avatar avatar-twin" style="background-image:url('/assets/avatar-robot-round.png')"></div>
+    <h1 id="heroHeading">Talk to my <em>digital twin</em>.</h1>
+    <p id="heroBody">Speak with the twin, in my own voice — and I might just chime in myself.</p>
+    <button class="btn btn--primary" id="startCallBtn">
+      <svg class="icon"><use href="/icons.svg#i-mic"/></svg> Start talking
+    </button>
+    <a class="chip voice-switch-hint" href="/"><svg class="icon icon--sm"><use href="/icons.svg#i-arrow-right"/></svg> Prefer to type? Switch to text chat</a>
   </div>
 
-  <div class="composer-dock">
-    <div class="composer-wrap" id="textComposerWrap">
-      <div class="composer" id="composer">
-        <textarea rows="1" id="messageInput" placeholder="Message the twin…" autofocus></textarea>
-        <button class="icon-btn" id="voiceLaunchBtn" title="Talk live"><svg class="icon"><use href="/icons.svg#i-mic"/></svg></button>
-        <button class="btn-send" id="sendBtn" title="Send (Enter)"><svg class="icon"><use href="/icons.svg#i-send"/></svg></button>
-      </div>
-      <div class="composer-hint">
-        <span><span class="kbd">Enter</span> to send</span>
-        <span class="sep"></span>
-        <span><span class="kbd">Shift</span>+<span class="kbd">Enter</span> for a new line</span>
-        <span class="sep"></span>
-        <span>Type <strong style="color:var(--blue-ink)">Qn</strong> for an instant FAQ answer</span>
-      </div>
-      <div class="composer-hint" id="footerLinks">
-        <a class="chip" href="https://www.linkedin.com/in/alex-haupt/" target="_blank" rel="noopener noreferrer"><svg class="icon icon--sm"><use href="/icons.svg#i-linkedin"/></svg> LinkedIn</a>
-        <a class="chip" href="https://github.com/HauptSec-AI" target="_blank" rel="noopener noreferrer"><svg class="icon icon--sm"><use href="/icons.svg#i-github"/></svg> GitHub</a>
-        <a class="chip" href="https://www.credly.com/users/alex.haupt/badges/credly" target="_blank" rel="noopener noreferrer"><svg class="icon icon--sm"><use href="/icons.svg#i-credly"/></svg> Credly</a>
-      </div>
-    </div>
-    <div class="composer-wrap" id="voiceInlineWrap" style="display:none"></div>
-  </div>
+  <div id="voicePanelRoot" style="display:none"></div>
 </main>
 
-<script type="module" src="/src/chat.ts"></script>
+<script type="module" src="/src/voice.ts"></script>
 </body>
 </html>

@@ -19,6 +19,14 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 SESSION_SECRET = os.environ.get("SESSION_SECRET") or f"avatar::{ADMIN_PASSWORD}"
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 
+# Voice (SPEC-VOICE.md) -- all optional. The app runs fine without voice configured;
+# the /api/voice/* routes return a clear error until these are set.
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID", "")
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
+ELEVENLABS_WEBHOOK_SECRET = os.environ.get("ELEVENLABS_WEBHOOK_SECRET", "")
+VOICE_MAX_SESSION_SECONDS = int(os.environ.get("VOICE_MAX_SESSION_SECONDS", "600"))
+
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
@@ -28,5 +36,6 @@ TRUNCATION_NOTE = (
     "ask the visitor to send something more concise]"
 )
 RATE_LIMIT = "20/minute"
+VOICE_SESSION_RATE_LIMIT = "5/minute"  # a voice session is far heavier than one chat message
 
 ADMIN_SESSION_COOKIE = "avatar_admin_session"

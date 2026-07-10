@@ -5,6 +5,7 @@ import { renderMarkdown } from "./markdown";
 import { initials, instantTagHtml, renderMessageHTML } from "./render";
 import { setupThemeToggle } from "./theme";
 import type { Message } from "./types";
+import type { MountedVoiceCall } from "./voiceUI";
 
 const COOKIE_NAME = "avatar_conversation_id";
 const NAME_STORAGE_KEY = "avatar-name";
@@ -24,12 +25,16 @@ const brandSub = document.getElementById("brandSub") as HTMLDivElement;
 const introHeading = document.getElementById("introHeading") as HTMLHeadingElement;
 const introBody = document.getElementById("introBody") as HTMLParagraphElement;
 const suggestRow = document.getElementById("suggestRow") as HTMLDivElement;
+const voiceLaunchBtn = document.getElementById("voiceLaunchBtn") as HTMLButtonElement;
+const textComposerWrap = document.getElementById("textComposerWrap") as HTMLDivElement;
+const voiceInlineWrap = document.getElementById("voiceInlineWrap") as HTMLDivElement;
 
 let ownerName = "Avatar";
 let conversationId = "";
 let lastActivityAt = Date.now();
 let pollTimer: number | undefined;
 let sending = false;
+let activeVoiceCall: MountedVoiceCall | null = null;
 const renderedIds = new Set<number>();
 
 setupThemeToggle("themeToggle");
@@ -207,6 +212,29 @@ messageInput.addEventListener("keydown", (e) => {
 });
 sendBtn.addEventListener("click", () => void sendMessage(messageInput.value));
 
+// ---- inline voice launcher (SPEC-VOICE.md) ----
+// Dynamically imported so the ElevenLabs SDK never loads for visitors who stick to text.
+function showTextComposer(): void {
+  voiceInlineWrap.style.display = "none";
+  voiceInlineWrap.innerHTML = "";
+  textComposerWrap.style.display = "";
+}
+
+async function launchVoice(): Promise<void> {
+  textComposerWrap.style.display = "none";
+  voiceInlineWrap.style.display = "";
+  const { mountVoiceCall } = await import("./voiceUI");
+  activeVoiceCall = await mountVoiceCall(voiceInlineWrap, conversationId, {
+    onClose: () => {
+      activeVoiceCall = null;
+      showTextComposer();
+      messageInput.focus();
+    },
+  });
+}
+
+voiceLaunchBtn.addEventListener("click", () => void launchVoice());
+
 nameInput.addEventListener("input", () => localStorage.setItem(NAME_STORAGE_KEY, nameInput.value));
 
 // ---- conversation identity ----
@@ -220,6 +248,11 @@ keepChatToggle.addEventListener("change", () => {
 });
 
 resetBtn.addEventListener("click", () => {
+  if (activeVoiceCall) {
+    activeVoiceCall.teardown();
+    activeVoiceCall = null;
+    showTextComposer();
+  }
   conversationId = newConversationId();
   renderedIds.clear();
   convoInner.innerHTML = "";

@@ -33,7 +33,7 @@ def faq_tool(question_number: int) -> str:
     return format_faq_answer(faq)
 
 
-def _pushover(message: str) -> str:
+def send_pushover_notification(message: str) -> str:
     if not config.PUSHOVER_USER or not config.PUSHOVER_TOKEN:
         return "Pushover is not configured; the message was not sent."
     response = requests.post(
@@ -51,7 +51,7 @@ async def push_tool(message: str) -> str:
     Args:
         message: The message to send to the human operator.
     """
-    return await asyncio.to_thread(_pushover, message)
+    return await asyncio.to_thread(send_pushover_notification, message)
 
 
 @lru_cache(maxsize=1)

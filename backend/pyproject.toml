@@ -25,4 +25,5 @@ dev = [
 pythonpath = ["."]
 markers = [
     "llm: tests that call the language model (cost tokens)",
+    "voice_live: tests that need the voice_sessions/channel Supabase migration applied (see SPEC-VOICE.md)",
 ]
