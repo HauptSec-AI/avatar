@@ -1,5 +1,7 @@
 # Avatar
 
+<p align="center"><img src="docs/screenshot.png" alt="Avatar visitor chat screenshot" width="720"></p>
+
 Interact with a digital version of you
 
 ## Introduction
