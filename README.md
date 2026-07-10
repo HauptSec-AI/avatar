@@ -6,9 +6,11 @@ Interact with a digital version of me
 
 ## Introduction
 
-This project is a web application for visitors to the site to interact with a Digital Twin of you. During their interaction, you can personally jump in (via an admin panel) and engage with the visitors direcly. An optional voice channel — visitors can talk to the twin, in your own cloned voice — is layered on top via [ElevenLabs](https://elevenlabs.io); see [SPEC-VOICE.md](SPEC-VOICE.md).
+Avatar is my Digital Twin: an AI version of me that visitors to my site can chat with. It knows my background, answers common questions, and puts visitors in touch with me directly when they ask to connect, or when it doesn't know the answer. I can jump into any conversation from an admin dashboard, and visitors see it happen live, right in the thread. An optional voice channel lets visitors actually talk to the twin, in my own cloned voice, via [ElevenLabs](https://elevenlabs.io) — see [SPEC-VOICE.md](SPEC-VOICE.md).
 
-This repo is a working example — Alex Haupt's own Digital Twin, built with [Claude Code](https://claude.com/claude-code) from the specification in [SPEC-AVATAR.md](SPEC-AVATAR.md). It's also a reusable starting point: the spec, the design system (`design-system/`), and the app itself are all here, so if you want to build your own twin, fork this repo, work through **Setup instructions** and **Personalize the twin** below to make it yours, then open the folder in Claude Code and ask it to (re)build the app from `SPEC-AVATAR.md`.
+It's live at **[avatar.hauptsec.xyz](https://avatar.hauptsec.xyz)**.
+
+Under the hood it's a FastAPI + vanilla TypeScript app built with [Claude Code](https://claude.com/claude-code) from the specs in this repo ([SPEC-AVATAR.md](SPEC-AVATAR.md), [SPEC-VOICE.md](SPEC-VOICE.md)), using the OpenAI Agents SDK via OpenRouter, Supabase for storage, and deployed as a single container on Fly.io. Those specs, along with the design system (`design-system/`), stay accurate as the project evolves — so if you'd rather stand up your own digital twin than read the code cold, the setup below is a solid starting point: work through **Setup instructions** and **Personalize the twin**, or point Claude Code at this repo and ask it to build from `SPEC-AVATAR.md`.
 
 ## Setup instructions
 
@@ -246,7 +248,7 @@ The same single container deploys to [fly.io](https://fly.io). The full guide - 
 
 1. Install `flyctl` and log in (`fly auth login`; `fly auth whoami` should print your email).
 2. Make sure `.env` is fully populated, including `SESSION_SECRET`. Its values become Fly secrets (pulled in by `deploy.sh`) and are never baked into the image.
-3. Pick your own globally-unique Fly app name and a region near your Supabase database, then set them in `scripts/deploy.sh` (`APP=...`) and `scripts/fly.toml` (`app`, `primary_region`). The reference deployment uses `avatar-alex` in `sjc`.
+3. Pick your own globally-unique Fly app name and a region near your Supabase database, then set them in `scripts/deploy.sh` (`APP=...`) and `scripts/fly.toml` (`app`, `primary_region`). This deployment (the one live at avatar.hauptsec.xyz) uses `avatar-alex` in `sjc`.
 4. Run `scripts/deploy.sh`. It creates the app on first run, stages the secrets, and deploys one always-on machine with `COOKIE_SECURE=1` (so the admin cookie is `Secure` over HTTPS).
 5. The app is then live at `https://<your-app>.fly.dev` (admin at `/admin`).
 
