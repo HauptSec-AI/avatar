@@ -5,6 +5,10 @@ end-to-end pass. All three ran against real infrastructure (Supabase, OpenRouter
 `openai/gpt-5.4-nano` model, and Pushover) — nothing here is mocked at the infra level except where
 noted. Test conversations and screenshots are deleted after a full pass (see "Cleanup" below).
 
+A fourth, lighter layer (1b, below) covers frontend logic in isolation with Vitest + jsdom — added once
+enough browser-API-touching modules (`markdown.ts`, `cookies.ts`, `theme.ts`) existed with no unit-test
+harness at all, previously testable only indirectly through the full Playwright layer.
+
 Voice (SPEC-VOICE.md) is covered inline in each layer below rather than as a separate file, following
 SPEC-AVATAR.md's single test-plan convention: `test_voice.py` in layer 1, `e2e/voice.spec.ts` in layer 2,
 and a dedicated voice checklist in layer 3. Per SPEC-VOICE.md's own testing section, real ElevenLabs
@@ -52,6 +56,30 @@ Run: `cd backend && uv run pytest -v`
 **Result:** 62 tests, 2 `llm`-marked (real calls), 3 `voice_live`-marked (need the Supabase voice
 migration applied), all passing: `62 passed` (`pytest -v`, migration already applied on the
 reference DB) — run `pytest -v -m "not voice_live"` for a pass that doesn't need it (59 passed).
+(Grown since — see individual RECS.md fixes for what's been added; not re-tallied here.)
+
+## 1b. Frontend unit tests (`frontend/src/*.test.ts`)
+
+Run: `cd frontend && npm run test:unit`
+
+Vitest + jsdom, for the browser-API-touching logic that doesn't need a real browser
+(`markdown.ts`, `cookies.ts`, `theme.ts`) — distinct from the Playwright e2e layer below, which
+drives the actual app in a real browser. `vitest.config.ts` sets `--localstorage-file` via
+`NODE_OPTIONS` since Node 22+ gates `localStorage` behind that flag and jsdom no longer polyfills
+it itself.
+
+- [x] `markdown.test.ts` — `escapeHtml` escapes all five HTML-significant characters;
+      `renderMarkdown`'s paragraph/line-break splitting, `**bold**` and `[label](url)` conversion
+      (http/https/mailto only — unsafe schemes like `javascript:` are never linkified), and that
+      HTML is escaped *before* markdown is applied (a visitor message can't inject markup).
+- [x] `cookies.test.ts` — `getCookie`/`setCookie`/`deleteCookie` round-trip; a missing cookie
+      returns `null`; values with special characters survive URL-encoding; distinct cookie names
+      don't collide.
+- [x] `theme.test.ts` — `currentTheme()` defaults to dark and only reports light for the exact
+      string `"light"`; `setupThemeToggle()` toggles `data-theme` and persists to `localStorage`
+      on click, swaps the moon/sun icon, and doesn't throw if the button id isn't found.
+
+**Result:** 22 tests, all passing.
 
 ## 2. Playwright frontend tests (`test/e2e/`)
 

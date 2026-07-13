@@ -12,6 +12,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Vitest's jsdom-backed localStorage file (frontend/vitest.config.ts)
+frontend/.vitest-localstorage.sqlite*
+
 # Playwright test artifacts
 test/test-results/
 test/playwright-report/
