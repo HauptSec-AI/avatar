@@ -206,11 +206,17 @@ test.describe("Admin dashboard", () => {
   test("switching threads mid-fetch does not leak the stale thread's rows into the new one", async ({
     page,
     request,
-  }) => {
+  }, testInfo) => {
     // RECS.md: "Rapid UI actions (... switch admin threads mid-reply) can render
     // into the wrong panel". Delay conversation A's fetch, switch to B before A
     // resolves, then let A's (now-stale) response through and confirm it never
     // gets applied on top of B.
+    // Desktop only: mobile's master/detail layout hides the inbox list entirely
+    // once a thread is open, so clicking a second .convo-item isn't a valid
+    // interaction there without an intervening "Back" tap (a materially
+    // different race than this test drives) -- the underlying fix
+    // (openConversationToken in admin.ts) is viewport-independent regardless.
+    test.skip(testInfo.project.name !== "desktop", "needs the desktop side-by-side inbox+thread layout");
     const idA = await seedContactCaptureConversation(request);
     const idB = crypto.randomUUID();
     await request.post("/api/chat", { data: { conversation_id: idB, message: "Q1" } });
