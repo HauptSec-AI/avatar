@@ -203,14 +203,19 @@ cd backend && uv run pytest tests/test_voice.py -v
 
 ## Personalize the twin (the `knowledge/` folder)
 
-The twin's knowledge and voice come from a few files in `knowledge/`, read into the system prompt at runtime. Edit these to make the twin yours:
+The twin's knowledge and voice come from a set of topic files in `knowledge/`, read into the system prompt at runtime (`backend/app/knowledge.py`'s `build_instructions()`). Edit these to make the twin yours - each is plain first-person Markdown, and any file that lists dated entries (career, education, dated projects) is kept **chronological, newest to oldest**:
 
-- **`knowledge.md`** - a rich, first-person profile of you (background, work, skills, certifications, personal notes). The main "who I am" source.
-- **`style.md`** - how the twin should sound: voice and personality, formatting rules, and safety/guardrail rules for answering on the public internet.
+- **`WORK.md`** - current role and career history.
+- **`SKILLS.md`** - certifications and skills.
+- **`PROJECTS.md`** - work and personal projects.
+- **`EDUCATION.md`** - schooling.
+- **`PERSONAL.md`** - personal/hobby background.
+- **`CONTACT.md`** - links and contact info.
+- **`PERSONALITY.md`** - how the twin should sound: voice and personality, formatting rules, and safety/guardrail rules for answering on the public internet. Unlike the six files above, this one isn't first-person background - it's behavioral instructions for the twin itself.
 - **`faq.jsonl`** - one JSON object per line. Each row has `faq` (number), `question` (the full question), `answer` (the full answer, in markdown), and `query` (a short, precise phrasing used only for routing). The prompt lists the `query` phrasings so the model can match a visitor's question to a number; the FAQ tool and the `Qn` shortcut then return the full original question and answer. Visitors can also type a bare `Qn` (e.g. `Q2`) for an instant answer with no LLM call, and a deep link like `…/?q=2` opens the chat and immediately asks Q2 (handy for sharing a direct answer or embedding).
 - **`pic.jpg`** - your photo, used for the human avatar; a robotic variant is used for the twin (see `design-system/docs/avatar-generation.md`).
 
-There is no vector database. (Earlier versions used `summary.txt` and a `linkedin.pdf`; these have been replaced by `knowledge.md` and `style.md`.)
+There is no vector database. (Earlier versions used `summary.txt` and a `linkedin.pdf`, then a single `knowledge.md` + `style.md`; those two were split into the topic files above so each subject has its own file, easier to keep organized and chronological as it grows.)
 
 A couple of owner-specific bits live in the frontend rather than `.env`: the **footer links** in `frontend/index.html` point to the owner's LinkedIn, GitHub, and Credly (update them to your own — add/remove chips as you like), and the avatar images in `frontend/public/assets/` are generated from `pic.jpg` (see `design-system/docs/avatar-generation.md`). The background texture can also be swapped (rings / crosses / grid) via the `--grid-mark` token in `frontend/public/tokens.css` — see `design-system/docs/background-texture.md`. The color palette is also just tokens: the dark theme in this repo uses a Matrix-inspired green/black palette (see the top of `frontend/public/tokens.css`), swap the values there for your own theme, dark and light are independently configurable.
 

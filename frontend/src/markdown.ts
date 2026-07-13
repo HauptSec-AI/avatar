@@ -1,5 +1,5 @@
 // Minimal, safe markdown for chat bubbles: paragraphs, links, bold — exactly what
-// components.css styles (.bubble p / a / strong) and knowledge/style.md asks for
+// components.css styles (.bubble p / a / strong) and knowledge/PERSONALITY.md asks for
 // ("no code blocks"). Deliberately not a general-purpose renderer.
 
 export function escapeHtml(s: string): string {

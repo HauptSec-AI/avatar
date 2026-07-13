@@ -58,7 +58,19 @@ Be absolutely sure to use current, idiomatic treatment of OpenAI Agents SDK. Use
   - The visitor page reads `?q=N` from its own URL, so the iframe's `src` can carry it. The host page copies its own `?q=` onto the iframe (server-side in a template/shortcode, or a few lines of JS) so that, e.g., `yourdomain.com/avatar?q=2` answers Q2 inside the iframe. A ready-to-paste embed snippet ships at `scripts/wordpress-embed.html` (full-bleed below the site nav, a content-column max-width override, an overflow-x guard, and the `?q=` passthrough); set its `BASE` constant to your app's subdomain and the iframe `title` to your own name.
   - The app sets no `X-Frame-Options`/CSP, so it can be framed. If security headers are added later, prefer `Content-Security-Policy: frame-ancestors <host>` over `X-Frame-Options: DENY`.
   - "Keep chat" relies on a `SameSite=Lax` cookie, which a browser treats as third-party inside a cross-site iframe (so persistence may not stick). To keep cookies first-party, serve the app from a subdomain of the host (e.g. `avatar.example.com`) via a fly.io custom domain and embed that. Map the subdomain with a **CNAME** to the Fly hashed target (e.g. `<hash>.<app>.fly.dev`), not A/AAAA records: the app's IPv4 is a *shared* Fly address and a CNAME auto-tracks Fly IP changes. Let's Encrypt then issues the cert. If the host domain is behind a Cloudflare proxy, the record must be DNS-only (grey cloud) plus a `_fly-ownership` TXT record. See `DEPLOY.md`.
-- The folder `knowledge/` holds the owner knowledge factored into the system prompt: `knowledge.md` (a rich first-person profile), `style.md` (voice, formatting and safety rules), `faq.jsonl` (the numbered FAQ — each row has a concise `query` for routing plus the full original `question` and `answer`), and `pic.jpg` (the owner photo used for the avatars)
+- The folder `knowledge/` holds the owner knowledge factored into the system prompt, split into
+  one topic file per subject rather than one large profile, plus the FAQ and photo: `WORK.md`
+  (current role and career history, newest to oldest), `SKILLS.md` (certifications and skills),
+  `PROJECTS.md` (work and personal projects), `EDUCATION.md` (schooling, newest to oldest),
+  `PERSONAL.md` (personal/hobby background), `CONTACT.md` (links and contact info),
+  `PERSONALITY.md` (voice, formatting and safety rules — the twin's behavioral instructions, not
+  first-person background), `faq.jsonl` (the numbered FAQ — each row has a concise `query` for
+  routing plus the full original `question` and `answer`), and `pic.jpg` (the owner photo used for
+  the avatars). `backend/app/knowledge.py`'s `build_instructions()` concatenates the six
+  first-person files (in that order) into the prompt's "Background" section and `PERSONALITY.md`
+  into its "Style" section; each file is plain first-person Markdown, kept chronological
+  newest-to-oldest wherever it lists dated entries (career, education, dated projects), so a new
+  owner can replace the content of these files with their own without touching any code.
 
 ### The Reference Files (historical)
 
@@ -178,7 +190,20 @@ Clarifications agreed before starting work:
 
 2. **Model.** The model name is read from the `MODEL` env var (OpenRouter `openai/...` prefix). `openai/gpt-5.4-nano` is the cheap default for development and testing (and the code default in `config.py`); the reference production deployment uses `openai/gpt-5.4-mini`. Each owner sets their own.
 
-3. **Knowledge / RAG.** No vector DB. The system prompt is composed from `knowledge/knowledge.md` (a rich first-person profile of the owner) and `knowledge/style.md` (the owner's voice plus formatting and safety rules), together with the numbered `faq.jsonl`. Each FAQ row carries a concise `query` (these short phrasings are listed in the prompt so the model can route a visitor's question to a number) alongside the full original `question` and `answer`; both the `faq_tool` and the `Qn` instant-answer shortcut return the full original question and answer. (Earlier drafts inlined `summary.txt` and text extracted from `linkedin.pdf`; those have been superseded by `knowledge.md` + `style.md` and removed, and the `pypdf` dependency with them.)
+3. **Knowledge / RAG.** No vector DB. The system prompt is composed from the topic files in
+   `knowledge/` described above — `WORK.md`, `SKILLS.md`, `PROJECTS.md`, `EDUCATION.md`,
+   `PERSONAL.md`, and `CONTACT.md` feed the "Background" section (a rich first-person profile of
+   the owner, split by subject instead of one large file), and `PERSONALITY.md` feeds the "Style"
+   section (the owner's voice plus formatting and safety rules) — together with the numbered
+   `faq.jsonl`. Each FAQ row carries a concise `query` (these short phrasings are listed in the
+   prompt so the model can route a visitor's question to a number) alongside the full original
+   `question` and `answer`; both the `faq_tool` and the `Qn` instant-answer shortcut return the
+   full original question and answer. (Earlier drafts inlined `summary.txt` and text extracted
+   from `linkedin.pdf`; those were superseded by a single `knowledge.md` + `style.md`, which were
+   in turn split into the seven topic files above so each subject — work history, skills,
+   projects, education, personal background, contact info, and voice/safety style — has its own
+   file, easier for an owner to maintain and keep chronological. The `pypdf` dependency used for
+   the old `linkedin.pdf` extraction was removed at that time.)
 
 4. **Human-in-the-loop semantics.** When the human posts from admin, the Avatar does NOT react to it. The human's message is inserted into the thread; the full conversation (including it) is provided to the Avatar the next time the visitor submits something. To the visitor, the human's message renders as a separate bubble using the profile pic, distinguished by image + yellow ring + tint + glow (per the design system).
 

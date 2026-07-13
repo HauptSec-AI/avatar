@@ -91,7 +91,8 @@ rows the admin UI already renders.
   text agent's persona, knowledge, style, and safety rules. Rather than pasting the prompt into the
   ElevenLabs dashboard once and letting it rot, the backend exposes a small sync step that pushes
   `knowledge.build_instructions()` — the exact same function that already builds the text agent's
-  system prompt from `knowledge/knowledge.md`, `knowledge/style.md`, and `knowledge/faq.jsonl` — to
+  system prompt from the topic files in `knowledge/` (`WORK.md`, `SKILLS.md`, `PROJECTS.md`,
+  `EDUCATION.md`, `PERSONAL.md`, `CONTACT.md`, `PERSONALITY.md`) and `knowledge/faq.jsonl` — to
   the ElevenLabs agent's prompt field via their agent-update API. Run it once to provision the agent
   and again any time `knowledge/` changes (see **Setup and Validation**). No second knowledge base
   is attached on the ElevenLabs side for this reason: the prompt already carries the full knowledge,

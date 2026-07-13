@@ -41,10 +41,17 @@ def match_instant_answer(message: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+BACKGROUND_FILES = ("WORK.md", "SKILLS.md", "PROJECTS.md", "EDUCATION.md", "PERSONAL.md", "CONTACT.md")
+
+
+def _read_knowledge_file(name: str) -> str:
+    return (config.KNOWLEDGE_DIR / name).read_text(encoding="utf-8")
+
+
 @lru_cache(maxsize=1)
 def build_instructions() -> str:
-    knowledge_md = (config.KNOWLEDGE_DIR / "knowledge.md").read_text(encoding="utf-8")
-    style_md = (config.KNOWLEDGE_DIR / "style.md").read_text(encoding="utf-8")
+    background_md = "\n\n---\n\n".join(_read_knowledge_file(name) for name in BACKGROUND_FILES)
+    style_md = _read_knowledge_file("PERSONALITY.md")
     owner = config.OWNER_NAME
 
     faq_list = "\n".join(f"{faq['faq']}. {faq['query']}" for faq in load_faqs())
@@ -71,7 +78,7 @@ transcript as context. Reply with your response text only — do not include a l
 
 # Background on {owner}
 
-{knowledge_md}
+{background_md}
 
 # Style
 
