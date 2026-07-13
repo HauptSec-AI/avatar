@@ -43,5 +43,7 @@ TRUNCATION_NOTE = (
 )
 RATE_LIMIT = "20/minute"
 VOICE_SESSION_RATE_LIMIT = "5/minute"  # a voice session is far heavier than one chat message
+ADMIN_LOGIN_RATE_LIMIT = "10/minute"  # per client IP -- blocks rapid-fire password guessing
+ADMIN_LOGIN_LOCKOUT_LIMIT = "5/15minute"  # per client IP, failures only -- blocks slow-drip guessing
 
 ADMIN_SESSION_COOKIE = "avatar_admin_session"

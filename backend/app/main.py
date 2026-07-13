@@ -39,6 +39,14 @@ def _sse(event: str, data: dict) -> bytes:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
 
 
+def _client_ip(request: Request) -> str:
+    # Fly.io terminates TLS at its edge and forwards the real visitor IP in this
+    # header; fall back to the raw socket peer for local/non-Fly deployments.
+    return request.headers.get("fly-client-ip") or (
+        request.client.host if request.client else "unknown"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -250,9 +258,17 @@ async def voice_webhook(request: Request):
 
 
 @app.post("/admin/login")
-async def admin_login(payload: AdminLoginRequest, response: Response):
+async def admin_login(payload: AdminLoginRequest, request: Request, response: Response):
+    client_ip = _client_ip(request)
+    if not ratelimit.allow_admin_login_attempt(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={"error": "Too many login attempts. Please wait a moment and try again."},
+        )
     if payload.password != config.ADMIN_PASSWORD:
+        ratelimit.record_admin_login_failure(client_ip)
         raise HTTPException(status_code=401, detail="Incorrect password")
+    ratelimit.reset_admin_login_lockout(client_ip)
     response.set_cookie(
         key=config.ADMIN_SESSION_COOKIE,
         value=security.create_session_token(),

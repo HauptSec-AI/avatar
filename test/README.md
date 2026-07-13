@@ -5,6 +5,14 @@ end-to-end pass. All three ran against real infrastructure (Supabase, OpenRouter
 `openai/gpt-5.4-nano` model, and Pushover) — nothing here is mocked at the infra level except where
 noted. Test conversations and screenshots are deleted after a full pass (see "Cleanup" below).
 
+Voice (SPEC-VOICE.md) is covered inline in each layer below rather than as a separate file, following
+SPEC-AVATAR.md's single test-plan convention: `test_voice.py` in layer 1, `e2e/voice.spec.ts` in layer 2,
+and a dedicated voice checklist in layer 3. Per SPEC-VOICE.md's own testing section, real ElevenLabs
+STT/TTS/WebRTC round trips are billed per call-minute, so the routine suite (layers 1-2) never drives a
+full successful connection — it exercises the free error/UI paths (mic-permission-denied, rate limiting,
+mocked webhook payloads) instead, and reserves a real live call for a sparing, deliberate Docker
+end-to-end pass (not yet run — see layer 3 below).
+
 ## 1. Backend unit tests (`backend/tests/`)
 
 Run: `cd backend && uv run pytest -v`
@@ -15,6 +23,21 @@ Run: `cd backend && uv run pytest -v`
       validates the id and returns an empty list for an unseen conversation.
 - [x] `test_admin_auth.py` — login success/failure, logout, and the critical security property:
       every `/admin/*` route returns 401 with no/garbage session cookie and succeeds with a valid one.
+      Also: `/admin/login` is rate-limited (10/minute per client IP, 429 on the 11th call) and locks
+      out after 5 wrong-password attempts (429 on the 6th, even with the correct password) until the
+      window rolls off; a successful login resets the failure count so it doesn't carry into later
+      attempts.
+- [x] `test_voice.py` — SPEC-VOICE.md coverage: webhook HMAC signature verification (valid, wrong
+      secret, stale timestamp, missing/malformed header, no secret configured), the ElevenLabs
+      agent-config payload shape, `/api/voice/session` (invalid id, 503 when unconfigured, 5/minute
+      rate limit, token minted when configured, 502 on an ElevenLabs API failure), the `faq_tool`/
+      `push_tool` webhooks (shared-secret auth, identical answers to the text `faq_tool` for the same
+      FAQ number, Pushover call + `needs_attention`), and `/api/voice/webhook` (signature rejection,
+      non-transcript events skipped, idempotent on a redelivered/unknown claim, transcript rows
+      inserted with `channel="voice"` and the last avatar turn flagged `needs_attention`). Three
+      tests are `@pytest.mark.voice_live` (need the real `channel`/`voice_sessions` migration
+      applied — see SPEC-VOICE.md "Setup and Validation"): the session-mapping round trip, claim
+      idempotency against the real table, and a full webhook-to-Supabase persistence check.
 - [x] `test_admin_conversations.py` — inbox listing; opening a conversation marks its rows read and
       clears `needs_attention` (verified in the response and via a fresh DB read); posting a human
       message inserts `role=human, read=true`; resolve clears `needs_attention` without a reply.
@@ -26,11 +49,16 @@ Run: `cd backend && uv run pytest -v`
       20/minute rate limit returns 429 on the 21st call *before* any LLM call, isolated per
       conversation_id. 2 tests are `@pytest.mark.llm` (real calls through `openai/gpt-5.4-nano`).
 
-**Result:** 35 tests, 2 LLM-marked, all passing (`35 passed`).
+**Result:** 62 tests, 2 `llm`-marked (real calls), 3 `voice_live`-marked (need the Supabase voice
+migration applied), all passing: `62 passed` (`pytest -v`, migration already applied on the
+reference DB) — run `pytest -v -m "not voice_live"` for a pass that doesn't need it (59 passed).
 
 ## 2. Playwright frontend tests (`test/e2e/`)
 
-Run: `cd test && npx playwright test` (desktop = 1440×900 Chromium, mobile = Pixel 7 emulation).
+Run: `cd test && npx playwright test` across three projects — `desktop` (1440×900 Chromium),
+`mobile-chrome` (Pixel 7 emulation), and `mobile-safari` (real WebKit via iPhone 14 emulation, added
+because Safari doesn't honor styles defined inside an externally-referenced SVG pulled in via
+`<use>`, which Chrome's mobile emulation alone wouldn't catch).
 Screenshots land in `test/screenshots/` (deleted after review — see "Cleanup").
 
 ### Visitor chat (`e2e/visitor.spec.ts`)
@@ -66,8 +94,24 @@ Screenshots land in `test/screenshots/` (deleted after review — see "Cleanup")
       via a direct API call after the thread is already open, then resolving without reopening.
 - [x] Logout returns to the login gate.
 
-**Result:** 36 tests (18 × 2 viewports), 1 skipped by design (desktop project skips the
-mobile-only master/detail test), all others passing.
+### Voice (`e2e/voice.spec.ts`)
+
+- [x] `/voice` hero renders (heading, start-call button, keep-chat switch, name field, reset),
+      dark-default, theme toggle to light; screenshotted in both themes.
+- [x] Starting a call with no mic permission granted shows a dismissible, non-alarming banner (the
+      real free error path — a genuine `POST /api/voice/session` token mint, then a real failed
+      WebRTC handshake since Playwright's default context has no mic access); "Back to chat" returns
+      to the hero.
+- [x] Reset tears down an active call and issues a fresh `conversation_id` cookie.
+- [x] Inline "Talk live" launcher on the main chat page swaps the composer for the voice panel and
+      back; composer re-focuses on return.
+- [x] Voice session minting is rate-limited at 5/minute per `conversation_id` (429 on the 6th call).
+- [x] `/api/voice/session` rejects an invalid `conversation_id` (400).
+- [x] Admin: a `channel="voice"` message renders the mic-icon channel badge (mocked admin API
+      responses, no backend hit).
+
+**Result:** 75 tests (25 × 3 projects), 1 skipped by design (the mobile-only master/detail test
+skips itself on the `desktop` project via `test.skip`), all others passing.
 
 ## 3. Docker end-to-end (single container)
 
@@ -102,6 +146,19 @@ had settled, and the real build/run/test pass below went through cleanly on the 
 - [x] Visual spot-check via Playwright against the running container — visitor page renders
       correctly (new digital-twin avatar included).
 
+### Voice (SPEC-VOICE.md) — not yet run against the container
+
+- [ ] A genuinely live voice smoke test: visitor speaks (pre-recorded audio ElevenLabs actually
+      transcribes), twin answers in the owner's cloned voice, a contact-capture flow triggers
+      `push_tool` mid-call with a real Pushover notification, the call ends, and the admin dashboard
+      shows the complete transcript in the same thread as any prior text messages with the mic
+      channel badge — per SPEC-VOICE.md "Success Criteria". Deliberately not run as part of this
+      pass (bills real ElevenLabs call-minutes; SPEC-VOICE.md's own testing section reserves this
+      for a sparing, deliberate run, not the routine suite) — layers 1-2 above already cover the
+      webhook/tool/UI logic without a live call. Run this manually once against a container with
+      `ELEVENLABS_*` configured before relying on voice in production; see also the separate,
+      lower-priority finding in `RECS.md` about adding voice checks to `DEPLOY.md`'s smoke checklist.
+
 ### Local end-to-end smoke test (ran in place of Docker, same code path minus containerization)
 
 - [x] `cd backend && uv run uvicorn app.main:app --port 8000 --app-dir .` serving the Vite-built
@@ -118,4 +175,7 @@ had settled, and the real build/run/test pass below went through cleanly on the 
       batches after each later verification round (backend test reruns, avatar-asset visual
       checks, the Docker e2e pass) — every row was test data; the table has no real visitor
       traffic yet.
+- [x] Deleted the corresponding `voice_sessions` mapping rows alongside their `messages` rows, per
+      SPEC-VOICE.md's cleanup instruction (no real audio was recorded — the live voice smoke test
+      above hasn't been run yet, so there's no test audio to delete).
 - [x] `./scripts/stop_mac.sh` — container stopped and removed after the Docker e2e pass.
