@@ -34,6 +34,9 @@ let pollTimer: number | undefined;
 let sending = false;
 let activeVoiceCall: MountedVoiceCall | null = null;
 const renderedIds = new Set<number>();
+// Bumped by Reset so a still-in-flight stream from before the reset can tell it's
+// been superseded and stop touching the (now different) conversation's DOM.
+let renderGeneration = 0;
 
 setupThemeToggle("themeToggle");
 
@@ -141,6 +144,7 @@ async function sendMessage(text: string): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed || sending) return;
 
+  const myGeneration = renderGeneration;
   sending = true;
   setComposerEnabled(false);
   messageInput.value = "";
@@ -154,11 +158,13 @@ async function sendMessage(text: string): Promise<void> {
   try {
     await postChat(conversationId, nameInput.value.trim() || null, trimmed, {
       onVisitorSaved: (message) => {
+        if (myGeneration !== renderGeneration) return; // superseded by a Reset
         hideTyping();
         appendMessage(message);
         showTyping();
       },
       onToken: (delta) => {
+        if (myGeneration !== renderGeneration) return;
         hideTyping();
         if (!bubbleState) bubbleState = startAvatarBubble();
         bubbleState.text += delta;
@@ -166,6 +172,7 @@ async function sendMessage(text: string): Promise<void> {
         scrollToLatest();
       },
       onTool: (name, status) => {
+        if (myGeneration !== renderGeneration) return;
         hideTyping();
         if (!bubbleState) bubbleState = startAvatarBubble();
         if (!name) return;
@@ -181,6 +188,7 @@ async function sendMessage(text: string): Promise<void> {
         scrollToLatest();
       },
       onDone: (message) => {
+        if (myGeneration !== renderGeneration) return;
         hideTyping();
         renderedIds.add(message.id);
         if (bubbleState) {
@@ -192,6 +200,7 @@ async function sendMessage(text: string): Promise<void> {
         }
       },
       onError: (msg) => {
+        if (myGeneration !== renderGeneration) return;
         hideTyping();
         showBanner(msg);
       },
@@ -200,9 +209,12 @@ async function sendMessage(text: string): Promise<void> {
     // Runs even if postChat throws unexpectedly (api.ts's reader loop is expected
     // to catch its own errors and call onError instead, but this is the backstop
     // that keeps a dropped connection from permanently disabling the composer).
-    sending = false;
-    setComposerEnabled(true);
-    messageInput.focus();
+    // Only touch shared state if a Reset hasn't already taken over that job below.
+    if (myGeneration === renderGeneration) {
+      sending = false;
+      setComposerEnabled(true);
+      messageInput.focus();
+    }
   }
 }
 
@@ -251,6 +263,12 @@ keepChatToggle.addEventListener("change", () => {
 });
 
 resetBtn.addEventListener("click", () => {
+  // Invalidates any in-flight sendMessage's stream callbacks (and its finally
+  // block) -- without this, a reply that was still streaming when Reset was
+  // clicked could render its (stale) content into the freshly-cleared thread.
+  renderGeneration++;
+  sending = false;
+  setComposerEnabled(true);
   if (activeVoiceCall) {
     activeVoiceCall.teardown();
     activeVoiceCall = null;
@@ -258,6 +276,7 @@ resetBtn.addEventListener("click", () => {
   }
   conversationId = newConversationId();
   renderedIds.clear();
+  hideTyping();
   convoInner.innerHTML = "";
   convoInner.appendChild(introEl);
   introEl.style.display = "";

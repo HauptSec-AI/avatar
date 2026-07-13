@@ -50,6 +50,10 @@ let filter: Filter = "all";
 let searchQuery = "";
 let adminSending = false;
 let pollTimer: number | undefined;
+// Bumped on every openConversation() call so a slower, now-superseded fetch (the
+// human clicked a different conversation before this one's request resolved)
+// can tell it's stale and skip applying its (wrong-thread) results.
+let openConversationToken = 0;
 
 setupThemeToggle("themeToggle");
 
@@ -164,6 +168,7 @@ function renderThreadHeader(id: string): void {
 }
 
 async function openConversation(id: string): Promise<void> {
+  const myToken = ++openConversationToken;
   activeConversationId = id;
   renderedThreadIds.clear();
   currentThreadRows = [];
@@ -175,6 +180,7 @@ async function openConversation(id: string): Promise<void> {
 
   try {
     const rows = await adminOpenConversation(id);
+    if (myToken !== openConversationToken) return; // superseded by a newer click
     const summary = conversations.find((c) => c.conversation_id === id);
     if (summary) {
       summary.unread = false;
@@ -186,6 +192,7 @@ async function openConversation(id: string): Promise<void> {
     renderSidebar();
     adminMessageInput.focus();
   } catch (e) {
+    if (myToken !== openConversationToken) return;
     if (e instanceof AuthError) return showLoginGate();
     throw e;
   }
@@ -324,10 +331,12 @@ async function pollTick(): Promise<void> {
     // needs_attention, which is correct for a deliberate click but wrong here: a
     // poll tick firing right after a new flagged message arrives would silently
     // clear the flag before the human actually notices (RECS.md).
+    const polledConversationId = activeConversationId;
     try {
-      const rows = await getConversation(activeConversationId);
+      const rows = await getConversation(polledConversationId);
+      if (polledConversationId !== activeConversationId) return; // switched threads mid-poll
       appendThreadRows(rows);
-      renderThreadHeader(activeConversationId);
+      renderThreadHeader(polledConversationId);
     } catch {
       // transient; retry next tick
     }

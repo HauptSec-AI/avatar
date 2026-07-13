@@ -100,6 +100,44 @@ test.describe("Visitor chat", () => {
     await expect(page.locator(".msg--visitor")).toHaveCount(0);
   });
 
+  test("resetting mid-stream discards the stale reply instead of leaking into the new conversation", async ({
+    page,
+  }) => {
+    // RECS.md: "Rapid UI actions (reset mid-stream ...) can render into the wrong
+    // panel". Hold the /api/chat response open, click Reset before it resolves,
+    // then release it -- its (now-stale) content must never appear.
+    let releaseReply: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseReply = resolve;
+    });
+    await page.route("**/api/chat", async (route) => {
+      await gate;
+      const body =
+        'event: visitor\ndata: {"message":{"id":9001,"conversation_id":"x","role":"visitor","content":"stale","created_at":"2024-01-01T00:00:00Z","read":true,"needs_attention":false,"channel":"text","tool_calls":null}}\n\n' +
+        'event: token\ndata: {"text":"This stale reply should never appear."}\n\n' +
+        'event: done\ndata: {"message":{"id":9002,"conversation_id":"x","role":"avatar","content":"This stale reply should never appear.","created_at":"2024-01-01T00:00:01Z","read":true,"needs_attention":false,"channel":"text","tool_calls":null}}\n\n';
+      await route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    });
+
+    await page.goto("/");
+    await page.fill("#messageInput", "hello");
+    await page.keyboard.press("Enter");
+    await page.click("#resetBtn"); // reset while the (gated) response is still pending
+    releaseReply!();
+    await page.waitForTimeout(500); // give the gated response a chance to (mis)apply
+
+    await expect(page.locator("#intro")).toBeVisible();
+    await expect(page.locator(".msg")).toHaveCount(0);
+    await expect(page.locator("#messageInput")).toBeEnabled();
+    await expect(page.locator("#sendBtn")).toBeEnabled();
+
+    // The composer must still work normally afterwards.
+    await page.fill("#messageInput", "Q1");
+    await page.unroute("**/api/chat");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".msg--avatar").first()).toBeVisible({ timeout: 10_000 });
+  });
+
   test("Keep chat off does not persist across reload", async ({ page }) => {
     await page.goto("/");
     await page.click("#keepChatToggle + .track"); // toggle the visible track; the input itself is pointer-events:none
