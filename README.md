@@ -184,6 +184,14 @@ grant select, insert, update, delete on public.voice_sessions to service_role;
 
 Click **Run without RLS** on this one too, for the same reason as the `messages` table (backend-only access via the secret key).
 
+**Validate voice connectivity** (optional but recommended, analogous to the Supabase check above):
+
+```
+cd backend && uv run pytest tests/test_elevenlabs_connection.py -v
+```
+
+Confirms `ELEVENLABS_API_KEY` is valid, `ELEVENLABS_AGENT_ID` resolves to the agent you just configured, and a connection credential can be minted end-to-end. These tests are marked `elevenlabs_live` since — unlike Supabase — voice is optional; a text-only setup should skip them (`pytest -v -m "not elevenlabs_live"`, or just don't run this file).
+
 Once configured, a visitor can reach voice from the dedicated `/voice` page or the mic button next to the composer on the main chat page — both share the same conversation thread as text chat, and a spoken conversation shows up in `/admin` exactly like a typed one, with a small mic badge on the turns that were spoken.
 
 ### Validate the setup
@@ -268,7 +276,14 @@ Putting the app on your own website is **optional** - the `https://<your-app>.fl
 
 ## Built-in protections
 
-The backend guards your API key automatically, with no configuration: visitor messages longer than 20,000 characters are truncated (with a short note appended) before being stored or sent to the model, and more than 20 messages per minute from a single conversation are rejected (HTTP 429, with a friendly slow-down message in the chat) before any model call is made.
+The backend guards itself automatically, with no configuration required:
+
+- Visitor messages longer than 20,000 characters are truncated (with a short note appended) before being stored or sent to the model; the schema also hard-caps the raw field at 100,000 characters, and a global request-body-size limit (2MB) protects routes with no per-field limit.
+- More than 20 chat messages per minute from a single conversation are rejected (HTTP 429, with a friendly slow-down message in the chat) before any model call is made.
+- `/admin/login` is rate-limited (10/minute per IP) and locks out for 15 minutes after 5 wrong-password attempts in a row, clearing on a successful login.
+- Voice session minting, the session-start handshake (which requires a server-issued, conversation-scoped nonce — not just any caller), and the post-call webhook each have their own rate limits.
+- `push_tool`/Pushover notifications share one global cap (not per-conversation) so a script minting fresh conversation ids can't flood your phone past the intended budget.
+- `GET /api/health` gives Fly (or any monitor) a real check that actually touches Supabase, not just "the process is up."
 
 ## Credit
 
