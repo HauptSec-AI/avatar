@@ -21,5 +21,8 @@ WORKDIR /app
 COPY knowledge/ ./knowledge/
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 CMD ["uv", "run", "--project", "backend", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "backend"]
