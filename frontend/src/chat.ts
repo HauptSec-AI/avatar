@@ -153,54 +153,59 @@ async function sendMessage(text: string): Promise<void> {
 
   let bubbleState: StreamingBubble | null = null;
 
-  await postChat(conversationId, nameInput.value.trim() || null, trimmed, {
-    onVisitorSaved: (message) => {
-      hideTyping();
-      appendMessage(message);
-      showTyping();
-    },
-    onToken: (delta) => {
-      hideTyping();
-      if (!bubbleState) bubbleState = startAvatarBubble();
-      bubbleState.text += delta;
-      bubbleState.bubble.innerHTML = renderMarkdown(bubbleState.text);
-      scrollToLatest();
-    },
-    onTool: (name, status) => {
-      hideTyping();
-      if (!bubbleState) bubbleState = startAvatarBubble();
-      if (!name) return;
-      let el = bubbleState.toolStatusEls.get(name);
-      if (!el) {
-        el = document.createElement("div");
-        el.className = "tool-status";
-        bubbleState.metaEl.insertAdjacentElement("afterend", el);
-        bubbleState.toolStatusEls.set(name, el);
-      }
-      el.classList.toggle("is-done", status === "done");
-      el.innerHTML = toolStatusHtml(name, status === "done");
-      scrollToLatest();
-    },
-    onDone: (message) => {
-      hideTyping();
-      renderedIds.add(message.id);
-      if (bubbleState) {
-        bubbleState.wrapper.dataset.id = String(message.id);
-        const tag = instantTagHtml(message);
-        if (tag) bubbleState.metaEl.insertAdjacentHTML("beforeend", tag);
-      } else {
+  try {
+    await postChat(conversationId, nameInput.value.trim() || null, trimmed, {
+      onVisitorSaved: (message) => {
+        hideTyping();
         appendMessage(message);
-      }
-    },
-    onError: (msg) => {
-      hideTyping();
-      showBanner(msg);
-    },
-  });
-
-  sending = false;
-  setComposerEnabled(true);
-  messageInput.focus();
+        showTyping();
+      },
+      onToken: (delta) => {
+        hideTyping();
+        if (!bubbleState) bubbleState = startAvatarBubble();
+        bubbleState.text += delta;
+        bubbleState.bubble.innerHTML = renderMarkdown(bubbleState.text);
+        scrollToLatest();
+      },
+      onTool: (name, status) => {
+        hideTyping();
+        if (!bubbleState) bubbleState = startAvatarBubble();
+        if (!name) return;
+        let el = bubbleState.toolStatusEls.get(name);
+        if (!el) {
+          el = document.createElement("div");
+          el.className = "tool-status";
+          bubbleState.metaEl.insertAdjacentElement("afterend", el);
+          bubbleState.toolStatusEls.set(name, el);
+        }
+        el.classList.toggle("is-done", status === "done");
+        el.innerHTML = toolStatusHtml(name, status === "done");
+        scrollToLatest();
+      },
+      onDone: (message) => {
+        hideTyping();
+        renderedIds.add(message.id);
+        if (bubbleState) {
+          bubbleState.wrapper.dataset.id = String(message.id);
+          const tag = instantTagHtml(message);
+          if (tag) bubbleState.metaEl.insertAdjacentHTML("beforeend", tag);
+        } else {
+          appendMessage(message);
+        }
+      },
+      onError: (msg) => {
+        hideTyping();
+        showBanner(msg);
+      },
+    });
+  } finally {
+    // Runs even if postChat throws unexpectedly (api.ts's reader loop is expected
+    // to catch its own errors and call onError instead, but this is the backstop
+    // that keeps a dropped connection from permanently disabling the composer).
+    sending = false;
+    setComposerEnabled(true);
+    messageInput.focus();
+  }
 }
 
 messageInput.addEventListener("input", autoResize);

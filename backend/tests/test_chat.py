@@ -203,6 +203,28 @@ def test_mocked_llm_push_tool_sets_needs_attention(client, monkeypatch):
     assert avatar_row["tool_calls"] == ["push_tool"]
 
 
+def test_message_over_max_body_length_returns_422(client):
+    """ChatRequest.message has a hard max_length well above the 20k truncation
+    clamp -- an oversized body is rejected outright rather than fully buffered
+    (RECS.md: "No request body size limit")."""
+    conversation_id = str(uuid.uuid4())
+    too_long = "a" * (config.MAX_MESSAGE_BODY_CHARS + 1)
+    resp = client.post(
+        "/api/chat", json={"conversation_id": conversation_id, "message": too_long}
+    )
+    assert resp.status_code == 422
+
+
+def test_oversized_request_body_returns_413(client):
+    """Global body-size middleware rejects by Content-Length before any route
+    (including ones with no per-field max_length) buffers the whole thing."""
+    huge_body = b'{"conversation_id": "x", "message": "' + b"a" * config.MAX_REQUEST_BODY_BYTES + b'"}'
+    resp = client.post(
+        "/api/chat", content=huge_body, headers={"Content-Type": "application/json"}
+    )
+    assert resp.status_code == 413
+
+
 def test_invalid_conversation_id_returns_400(client):
     resp = client.post(
         "/api/chat", json={"conversation_id": "not-a-uuid", "message": "hello"}

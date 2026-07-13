@@ -82,7 +82,7 @@ def test_admin_logout_clears_cookie(admin_client):
     "method,path_suffix",
     [
         ("GET", "conversations"),
-        ("GET", "conversations/{id}"),
+        ("POST", "conversations/{id}"),
         ("POST", "conversations/{id}/messages"),
         ("POST", "conversations/{id}/resolve"),
     ],
@@ -101,7 +101,7 @@ def test_admin_routes_require_auth_no_cookie(client, method, path_suffix):
     "method,path_suffix",
     [
         ("GET", "conversations"),
-        ("GET", "conversations/{id}"),
+        ("POST", "conversations/{id}"),
         ("POST", "conversations/{id}/messages"),
         ("POST", "conversations/{id}/resolve"),
     ],

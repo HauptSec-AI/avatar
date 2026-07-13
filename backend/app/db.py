@@ -198,3 +198,30 @@ def claim_transcript_write(elevenlabs_conversation_id: str) -> dict[str, Any] | 
         return None
     row = result.data[0]
     return {"conversation_id": row["conversation_id"], "push_tool_used": row["push_tool_used"]}
+
+
+def release_transcript_claim(elevenlabs_conversation_id: str) -> None:
+    """Undo claim_transcript_write after a failed transcript write, so a webhook
+    redelivery gets to retry instead of finding transcript_saved permanently True
+    and silently skipping the rest of the transcript forever. Guarded by
+    `.eq("transcript_saved", True)` so this only ever reverts a claim this same
+    call flow made, never a concurrent winner's."""
+    get_client().table(VOICE_SESSIONS_TABLE).update({"transcript_saved": False}).eq(
+        "elevenlabs_conversation_id", elevenlabs_conversation_id
+    ).eq("transcript_saved", True).execute()
+
+
+def get_existing_voice_turns(conversation_id: str) -> dict[tuple[str, str], int]:
+    """(role, content) -> message id for every voice-channel row already saved for
+    this conversation. Makes a retried transcript webhook idempotent per turn
+    (not just per call): a redelivery that follows a partial failure re-inserts
+    only the turns that never made it in, instead of duplicating ones that did."""
+    result = (
+        get_client()
+        .table(TABLE)
+        .select("id,role,content")
+        .eq("conversation_id", conversation_id)
+        .eq("channel", "voice")
+        .execute()
+    )
+    return {(row["role"], row["content"]): row["id"] for row in result.data}

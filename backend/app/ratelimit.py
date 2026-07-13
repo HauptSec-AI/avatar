@@ -16,6 +16,8 @@ _rate = parse(config.RATE_LIMIT)
 _voice_rate = parse(config.VOICE_SESSION_RATE_LIMIT)
 _admin_login_rate = parse(config.ADMIN_LOGIN_RATE_LIMIT)
 _admin_login_lockout_rate = parse(config.ADMIN_LOGIN_LOCKOUT_LIMIT)
+_voice_session_started_rate = parse(config.VOICE_SESSION_STARTED_RATE_LIMIT)
+_push_tool_rate = parse(config.PUSH_TOOL_RATE_LIMIT)
 
 
 def allow_chat_message(conversation_id: str) -> bool:
@@ -24,6 +26,17 @@ def allow_chat_message(conversation_id: str) -> bool:
 
 def allow_voice_session(conversation_id: str) -> bool:
     return _limiter.hit(_voice_rate, "voice", conversation_id)
+
+
+def allow_voice_session_started(conversation_id: str) -> bool:
+    return _limiter.hit(_voice_session_started_rate, "voice_session_started", conversation_id)
+
+
+def allow_push_notification() -> bool:
+    """Single shared bucket across every caller (text push_tool AND voice's
+    /api/voice/tools/push), deliberately keyed with no per-conversation_id
+    identifier -- see PUSH_TOOL_RATE_LIMIT."""
+    return _limiter.hit(_push_tool_rate, "push_tool_global")
 
 
 def allow_admin_login_attempt(client_ip: str) -> bool:

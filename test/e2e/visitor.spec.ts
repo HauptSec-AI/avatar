@@ -126,6 +126,35 @@ test.describe("Visitor chat", () => {
     await expect(page.locator(".banner")).toContainText(/quickly|slow/i);
   });
 
+  test("dropped connection mid-stream re-enables the composer with a banner", async ({ page }) => {
+    // RECS.md: "Dropped SSE stream permanently disables the chat composer" -- no
+    // error handling in the reader loop meant a network drop left the send button
+    // dead until reload. Simulate that drop by making /api/chat's fetch resolve
+    // with a body stream that errors immediately, like a mid-read connection loss.
+    await page.addInitScript(() => {
+      const realFetch = window.fetch.bind(window);
+      window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : (input as Request).url;
+        if (!url.includes("/api/chat")) return realFetch(input, init);
+        const body = new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError("simulated network drop"));
+          },
+        });
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }) as typeof window.fetch;
+    });
+
+    await page.goto("/");
+    await page.fill("#messageInput", "hello");
+    await page.keyboard.press("Enter");
+
+    await expect(page.locator(".banner")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".banner")).toContainText(/lost connection/i);
+    await expect(page.locator("#messageInput")).toBeEnabled();
+    await expect(page.locator("#sendBtn")).toBeEnabled();
+  });
+
   test("overlong message is truncated server-side with a note appended", async ({ page, request }) => {
     await page.goto("/");
     const conversationId = await page.evaluate(() => crypto.randomUUID());

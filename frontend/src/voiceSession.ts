@@ -34,7 +34,7 @@ export async function startVoiceCall(
   conversationId: string,
   callbacks: VoiceCallCallbacks,
 ): Promise<VoiceCallHandle> {
-  let session: { token: string; agentId: string; maxSessionSeconds: number };
+  let session: { token: string; agentId: string; maxSessionSeconds: number; sessionNonce: string };
   try {
     session = await startVoiceSession(conversationId);
   } catch (e) {
@@ -56,7 +56,7 @@ export async function startVoiceCall(
       // push_tool always know which thread they're part of, with no lookup needed.
       dynamicVariables: { conversation_id: conversationId },
       onConnect: ({ conversationId: elevenlabsConversationId }) => {
-        void notifyVoiceSessionStarted(conversationId, elevenlabsConversationId);
+        void notifyVoiceSessionStarted(conversationId, elevenlabsConversationId, session.sessionNonce);
         // Client-side session-length cap: a UX safeguard against an accidentally
         // open-ended call, not an abuse defense -- our backend isn't in the media
         // path, so it can't forcibly end a live ElevenLabs session. The real abuse

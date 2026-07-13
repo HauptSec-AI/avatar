@@ -28,6 +28,14 @@ logger = logging.getLogger("avatar")
 app = FastAPI(title="Avatar")
 
 
+@app.middleware("http")
+async def limit_request_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > config.MAX_REQUEST_BODY_BYTES:
+        return JSONResponse(status_code=413, content={"error": "Request body too large."})
+    return await call_next(request)
+
+
 def _validate_conversation_id(conversation_id: str) -> None:
     try:
         uuid.UUID(conversation_id)
@@ -177,12 +185,22 @@ async def voice_session(payload: VoiceSessionRequest):
         "token": token,
         "agent_id": config.ELEVENLABS_AGENT_ID,
         "max_session_seconds": config.VOICE_MAX_SESSION_SECONDS,
+        "session_nonce": security.mint_voice_session_nonce(payload.conversation_id),
     }
 
 
 @app.post("/api/voice/session/started")
 async def voice_session_started(payload: VoiceSessionStartedRequest):
     _validate_conversation_id(payload.conversation_id)
+    if not ratelimit.allow_voice_session_started(payload.conversation_id):
+        return JSONResponse(
+            status_code=429,
+            content={"error": "Too many requests. Please wait a moment and try again."},
+        )
+    if not security.verify_voice_session_nonce(payload.session_nonce, payload.conversation_id):
+        # Without this, an unauthenticated caller could bind an arbitrary victim
+        # conversation_id to their own live ElevenLabs call and hijack its transcript.
+        raise HTTPException(status_code=401, detail="Invalid or expired voice session nonce")
     db.record_voice_session(payload.elevenlabs_conversation_id, payload.conversation_id)
     return {"ok": True}
 
@@ -235,21 +253,45 @@ async def voice_webhook(request: Request):
 
     conversation_id = claim["conversation_id"]
     transcript_turns = data.get("transcript", [])
-    last_avatar_row = None
-    for turn in transcript_turns:
-        turn_role = turn.get("role")
-        text = turn.get("message") or turn.get("text") or turn.get("content") or ""
-        if not text:
-            continue
-        role = "visitor" if turn_role == "user" else "avatar"
-        row = db.insert_message(conversation_id, role, text, channel="voice")
-        if role == "avatar":
-            last_avatar_row = row
+    try:
+        # (role, text) -> id already saved for this conversation -- makes a retry
+        # after a partial failure idempotent per turn, not just per call.
+        existing_turns = db.get_existing_voice_turns(conversation_id)
+        last_avatar_row_id = None
+        saved_count = 0
+        for turn in transcript_turns:
+            turn_role = turn.get("role")
+            text = turn.get("message") or turn.get("text") or turn.get("content") or ""
+            if not text:
+                continue
+            role = "visitor" if turn_role == "user" else "avatar"
+            key = (role, text)
+            if key in existing_turns:
+                if role == "avatar":
+                    last_avatar_row_id = existing_turns[key]
+                continue
+            row = db.insert_message(conversation_id, role, text, channel="voice")
+            saved_count += 1
+            existing_turns[key] = row["id"]
+            if role == "avatar":
+                last_avatar_row_id = row["id"]
 
-    if claim["push_tool_used"] and last_avatar_row:
-        db.set_needs_attention(last_avatar_row["id"])
+        if claim["push_tool_used"] and last_avatar_row_id is not None:
+            db.set_needs_attention(last_avatar_row_id)
+    except Exception:
+        # The claim already flipped transcript_saved=True before this loop ran; if
+        # we don't release it here, a mid-loop failure permanently strands the rest
+        # of the transcript -- a redelivery would find transcript_saved already True
+        # and silently skip it. Releasing lets ElevenLabs' retry pick up where this
+        # attempt left off (existing_turns above makes that retry idempotent).
+        logger.exception(
+            "Voice transcript write failed for elevenlabs_conversation_id=%s; releasing the claim",
+            elevenlabs_conversation_id,
+        )
+        db.release_transcript_claim(elevenlabs_conversation_id)
+        raise HTTPException(status_code=500, detail="Failed to save the transcript; please retry") from None
 
-    return {"ok": True, "messages_saved": len(transcript_turns)}
+    return {"ok": True, "messages_saved": saved_count}
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +334,7 @@ async def admin_list_conversations():
     return {"conversations": db.list_inbox()}
 
 
-@app.get(
+@app.post(
     "/admin/conversations/{conversation_id}",
     dependencies=[Depends(security.require_admin)],
 )

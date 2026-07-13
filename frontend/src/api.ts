@@ -55,29 +55,36 @@ export async function postChat(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    let boundary = buffer.indexOf("\n\n");
-    while (boundary !== -1) {
-      const raw = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      boundary = buffer.indexOf("\n\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const raw = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf("\n\n");
 
-      const lines = raw.split("\n");
-      const eventLine = lines.find((l) => l.startsWith("event: "));
-      const dataLine = lines.find((l) => l.startsWith("data: "));
-      if (!eventLine || !dataLine) continue;
+        const lines = raw.split("\n");
+        const eventLine = lines.find((l) => l.startsWith("event: "));
+        const dataLine = lines.find((l) => l.startsWith("data: "));
+        if (!eventLine || !dataLine) continue;
 
-      const eventType = eventLine.slice("event: ".length);
-      const data = JSON.parse(dataLine.slice("data: ".length));
-      if (eventType === "visitor") handlers.onVisitorSaved(data.message);
-      else if (eventType === "token") handlers.onToken(data.text);
-      else if (eventType === "tool") handlers.onTool(data.name, data.status);
-      else if (eventType === "done") handlers.onDone(data.message);
+        const eventType = eventLine.slice("event: ".length);
+        const data = JSON.parse(dataLine.slice("data: ".length));
+        if (eventType === "visitor") handlers.onVisitorSaved(data.message);
+        else if (eventType === "token") handlers.onToken(data.text);
+        else if (eventType === "tool") handlers.onTool(data.name, data.status);
+        else if (eventType === "done") handlers.onDone(data.message);
+      }
     }
+  } catch {
+    // A dropped connection mid-stream throws out of reader.read() -- without this,
+    // the exception would propagate out of postChat and skip sendMessage's
+    // composer-reset code entirely, leaving the send button disabled until reload.
+    handlers.onError("Lost connection to the server. Please try again.");
   }
 }
 
@@ -109,7 +116,11 @@ export async function adminListConversations(): Promise<ConversationSummary[]> {
 }
 
 export async function adminOpenConversation(id: string): Promise<Message[]> {
-  const r = await adminFetch(`/admin/conversations/${id}`);
+  // POST, not GET: opening a thread marks it read + clears needs_attention as a
+  // side effect (one round trip, per SPEC-AVATAR.md) -- a state-mutating GET is
+  // forgeable cross-site under SameSite=Lax via a top-level navigation, letting a
+  // malicious link silently dismiss a flagged conversation.
+  const r = await adminFetch(`/admin/conversations/${id}`, { method: "POST" });
   const body = await r.json();
   return body.messages;
 }
@@ -136,6 +147,7 @@ export interface VoiceSession {
   token: string;
   agentId: string;
   maxSessionSeconds: number;
+  sessionNonce: string;
 }
 
 export async function startVoiceSession(conversationId: string): Promise<VoiceSession> {
@@ -164,12 +176,18 @@ export async function startVoiceSession(conversationId: string): Promise<VoiceSe
   }
 
   const body = await response.json();
-  return { token: body.token, agentId: body.agent_id, maxSessionSeconds: body.max_session_seconds };
+  return {
+    token: body.token,
+    agentId: body.agent_id,
+    maxSessionSeconds: body.max_session_seconds,
+    sessionNonce: body.session_nonce,
+  };
 }
 
 export async function notifyVoiceSessionStarted(
   conversationId: string,
   elevenlabsConversationId: string,
+  sessionNonce: string,
 ): Promise<void> {
   try {
     await fetch("/api/voice/session/started", {
@@ -178,6 +196,7 @@ export async function notifyVoiceSessionStarted(
       body: JSON.stringify({
         conversation_id: conversationId,
         elevenlabs_conversation_id: elevenlabsConversationId,
+        session_nonce: sessionNonce,
       }),
     });
   } catch {

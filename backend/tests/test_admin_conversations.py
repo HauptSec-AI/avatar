@@ -45,7 +45,7 @@ def test_open_conversation_marks_read_and_clears_attention(admin_client):
     assert row2["needs_attention"] is True
     assert row2["read"] is False
 
-    resp = admin_client.get(f"/admin/conversations/{conversation_id}")
+    resp = admin_client.post(f"/admin/conversations/{conversation_id}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["conversation_id"] == conversation_id
@@ -65,8 +65,18 @@ def test_open_conversation_marks_read_and_clears_attention(admin_client):
 
 
 def test_open_conversation_invalid_id_returns_400(admin_client):
-    resp = admin_client.get("/admin/conversations/not-a-uuid")
+    resp = admin_client.post("/admin/conversations/not-a-uuid")
     assert resp.status_code == 400
+
+
+def test_open_conversation_get_is_no_longer_allowed(admin_client):
+    """Was a GET; switched to POST so it can't be triggered cross-site by a
+    SameSite=Lax-cookied top-level navigation (CSRF that dismisses a flagged
+    conversation)."""
+    conversation_id = str(uuid.uuid4())
+    _seed(conversation_id)
+    resp = admin_client.get(f"/admin/conversations/{conversation_id}")
+    assert resp.status_code == 405
 
 
 def test_post_admin_message_inserts_human_row_marked_read(admin_client):

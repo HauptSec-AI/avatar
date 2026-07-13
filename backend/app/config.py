@@ -43,7 +43,16 @@ TRUNCATION_NOTE = (
 )
 RATE_LIMIT = "20/minute"
 VOICE_SESSION_RATE_LIMIT = "5/minute"  # a voice session is far heavier than one chat message
+VOICE_SESSION_STARTED_RATE_LIMIT = "10/minute"  # generous -- the frontend fires this once per call
 ADMIN_LOGIN_RATE_LIMIT = "10/minute"  # per client IP -- blocks rapid-fire password guessing
 ADMIN_LOGIN_LOCKOUT_LIMIT = "5/15minute"  # per client IP, failures only -- blocks slow-drip guessing
+# Coarse GLOBAL (not per-conversation_id) cap on push_tool notifications: a script
+# minting a fresh conversation_id per request would otherwise dodge the 20/minute
+# per-conversation chat limit and flood Pushover.
+PUSH_TOOL_RATE_LIMIT = "10/hour"
+MAX_MESSAGE_BODY_CHARS = 100_000  # hard cap on the raw field so an oversized body is
+# rejected outright rather than silently buffered in full before the 20k clamp runs
+MAX_REQUEST_BODY_BYTES = 2_000_000  # ~2MB global ceiling across every route (defense in
+# depth for routes with no per-field max_length, e.g. the voice webhook's raw body)
 
 ADMIN_SESSION_COOKIE = "avatar_admin_session"

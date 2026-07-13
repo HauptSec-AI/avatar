@@ -17,7 +17,7 @@ import uuid
 import pytest
 import requests
 
-from app import agent_runner, config, db, knowledge, voice
+from app import agent_runner, config, db, knowledge, security, voice
 
 
 # ---------------------------------------------------------------------------
@@ -127,12 +127,14 @@ def test_voice_session_mints_token_when_configured(client, monkeypatch):
     monkeypatch.setattr(config, "ELEVENLABS_AGENT_ID", "agent-123")
     monkeypatch.setattr(voice, "mint_conversation_token", lambda: "fake-token")
 
-    resp = client.post("/api/voice/session", json={"conversation_id": str(uuid.uuid4())})
+    conversation_id = str(uuid.uuid4())
+    resp = client.post("/api/voice/session", json={"conversation_id": conversation_id})
     assert resp.status_code == 200
     body = resp.json()
     assert body["token"] == "fake-token"
     assert body["agent_id"] == "agent-123"
     assert body["max_session_seconds"] == config.VOICE_MAX_SESSION_SECONDS
+    assert security.verify_voice_session_nonce(body["session_nonce"], conversation_id)
 
 
 def test_voice_session_returns_502_on_elevenlabs_error(client, monkeypatch):
@@ -148,6 +150,96 @@ def test_voice_session_returns_502_on_elevenlabs_error(client, monkeypatch):
     resp = client.post("/api/voice/session", json={"conversation_id": str(uuid.uuid4())})
     assert resp.status_code == 502
     assert "try again" in resp.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# /api/voice/session/started -- nonce required, rate limited (RECS.md:
+# "Voice session-mapping hijack" -- this endpoint used to be unauthenticated).
+# ---------------------------------------------------------------------------
+
+
+def test_voice_session_started_rejects_missing_nonce(client):
+    resp = client.post(
+        "/api/voice/session/started",
+        json={"conversation_id": str(uuid.uuid4()), "elevenlabs_conversation_id": "el-x"},
+    )
+    assert resp.status_code == 422  # session_nonce is a required field
+
+
+def test_voice_session_started_rejects_nonce_for_a_different_conversation_id(client, monkeypatch):
+    """The core hijack this closes: an attacker can't bind a victim's conversation_id
+    using a nonce minted for their own (real) conversation_id."""
+    monkeypatch.setattr(db, "record_voice_session", lambda *a, **k: pytest.fail("must not record"))
+    attacker_nonce = security.mint_voice_session_nonce(str(uuid.uuid4()))
+    victim_conversation_id = str(uuid.uuid4())
+    resp = client.post(
+        "/api/voice/session/started",
+        json={
+            "conversation_id": victim_conversation_id,
+            "elevenlabs_conversation_id": "el-attacker-call",
+            "session_nonce": attacker_nonce,
+        },
+    )
+    assert resp.status_code == 401
+
+
+def test_voice_session_started_rejects_garbage_nonce(client):
+    resp = client.post(
+        "/api/voice/session/started",
+        json={
+            "conversation_id": str(uuid.uuid4()),
+            "elevenlabs_conversation_id": "el-x",
+            "session_nonce": "not-a-real-token",
+        },
+    )
+    assert resp.status_code == 401
+
+
+def test_voice_session_started_accepts_matching_nonce(client, monkeypatch):
+    recorded = {}
+    monkeypatch.setattr(
+        db,
+        "record_voice_session",
+        lambda eid, cid: recorded.update({"elevenlabs_conversation_id": eid, "conversation_id": cid}),
+    )
+    conversation_id = str(uuid.uuid4())
+    nonce = security.mint_voice_session_nonce(conversation_id)
+    resp = client.post(
+        "/api/voice/session/started",
+        json={
+            "conversation_id": conversation_id,
+            "elevenlabs_conversation_id": "el-real-call",
+            "session_nonce": nonce,
+        },
+    )
+    assert resp.status_code == 200
+    assert recorded == {"elevenlabs_conversation_id": "el-real-call", "conversation_id": conversation_id}
+
+
+def test_voice_session_started_rate_limited_after_ten_calls(client, monkeypatch):
+    monkeypatch.setattr(db, "record_voice_session", lambda *a, **k: None)
+    conversation_id = str(uuid.uuid4())
+    nonce = security.mint_voice_session_nonce(conversation_id)
+    for _ in range(10):
+        resp = client.post(
+            "/api/voice/session/started",
+            json={
+                "conversation_id": conversation_id,
+                "elevenlabs_conversation_id": "el-real-call",
+                "session_nonce": nonce,
+            },
+        )
+        assert resp.status_code == 200
+
+    resp = client.post(
+        "/api/voice/session/started",
+        json={
+            "conversation_id": conversation_id,
+            "elevenlabs_conversation_id": "el-real-call",
+            "session_nonce": nonce,
+        },
+    )
+    assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +369,7 @@ def test_voice_webhook_writes_transcript_and_flags_needs_attention(client, monke
         return row
 
     monkeypatch.setattr(db, "insert_message", _fake_insert)
+    monkeypatch.setattr(db, "get_existing_voice_turns", lambda cid: {})
     flagged = {}
     monkeypatch.setattr(db, "set_needs_attention", lambda message_id: flagged.setdefault("id", message_id))
 
@@ -303,6 +396,100 @@ def test_voice_webhook_writes_transcript_and_flags_needs_attention(client, monke
     assert flagged["id"] == inserted[1]["id"]  # flagged on the last avatar turn
 
 
+def test_voice_webhook_releases_claim_and_returns_500_on_partial_failure(client, monkeypatch):
+    """RECS.md: 'Voice transcript write can silently lose data on a retried webhook' --
+    claim_transcript_write used to flip permanently before any row was inserted, so a
+    mid-loop failure meant a redelivery found transcript_saved already True and
+    silently skipped the rest forever. Now a failure releases the claim."""
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    our_conversation_id = str(uuid.uuid4())
+    monkeypatch.setattr(
+        db,
+        "claim_transcript_write",
+        lambda eid: {"conversation_id": our_conversation_id, "push_tool_used": False},
+    )
+    monkeypatch.setattr(db, "get_existing_voice_turns", lambda cid: {})
+
+    inserted = []
+
+    def _fake_insert(conversation_id, role, content, **kwargs):
+        if len(inserted) == 1:
+            raise RuntimeError("simulated transient Supabase failure")
+        row = {"id": len(inserted) + 1, "conversation_id": conversation_id, "role": role, "content": content}
+        inserted.append(row)
+        return row
+
+    monkeypatch.setattr(db, "insert_message", _fake_insert)
+    released = {}
+    monkeypatch.setattr(db, "release_transcript_claim", lambda eid: released.setdefault("id", eid))
+
+    body = json.dumps(
+        {
+            "type": "post_call_transcription",
+            "data": {
+                "conversation_id": "elid-partial",
+                "transcript": [
+                    {"role": "user", "message": "First turn"},
+                    {"role": "agent", "message": "Second turn"},
+                    {"role": "user", "message": "Third turn"},
+                ],
+            },
+        }
+    ).encode()
+    header = _sign("shh", int(time.time()), body)
+    resp = client.post("/api/voice/webhook", content=body, headers={"elevenlabs-signature": header})
+
+    assert resp.status_code == 500
+    assert len(inserted) == 1  # only the first turn made it in before the failure
+    assert released["id"] == "elid-partial"
+
+
+def test_voice_webhook_retry_skips_already_saved_turns(client, monkeypatch):
+    """A redelivery after a partial failure re-inserts only the turns that never
+    made it in, using (role, content) already on file for the conversation."""
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    our_conversation_id = str(uuid.uuid4())
+    monkeypatch.setattr(
+        db,
+        "claim_transcript_write",
+        lambda eid: {"conversation_id": our_conversation_id, "push_tool_used": True},
+    )
+    # Simulates the first turn having already been saved by an earlier, failed attempt.
+    monkeypatch.setattr(db, "get_existing_voice_turns", lambda cid: {("visitor", "First turn"): 101})
+
+    inserted = []
+
+    def _fake_insert(conversation_id, role, content, **kwargs):
+        row = {"id": len(inserted) + 200, "conversation_id": conversation_id, "role": role, "content": content}
+        inserted.append(row)
+        return row
+
+    monkeypatch.setattr(db, "insert_message", _fake_insert)
+    flagged = {}
+    monkeypatch.setattr(db, "set_needs_attention", lambda message_id: flagged.setdefault("id", message_id))
+
+    body = json.dumps(
+        {
+            "type": "post_call_transcription",
+            "data": {
+                "conversation_id": "elid-retry",
+                "transcript": [
+                    {"role": "user", "message": "First turn"},
+                    {"role": "agent", "message": "Second turn"},
+                ],
+            },
+        }
+    ).encode()
+    header = _sign("shh", int(time.time()), body)
+    resp = client.post("/api/voice/webhook", content=body, headers={"elevenlabs-signature": header})
+
+    assert resp.status_code == 200
+    assert resp.json()["messages_saved"] == 1  # only the new turn was actually inserted
+    assert len(inserted) == 1
+    assert inserted[0]["content"] == "Second turn"
+    assert flagged["id"] == inserted[0]["id"]  # needs_attention still applied on the new avatar turn
+
+
 # ---------------------------------------------------------------------------
 # voice_live: needs the real `channel` column + `voice_sessions` table.
 # ---------------------------------------------------------------------------
@@ -312,9 +499,14 @@ def test_voice_webhook_writes_transcript_and_flags_needs_attention(client, monke
 def test_session_started_records_mapping_and_is_looked_up(client):
     conversation_id = str(uuid.uuid4())
     elevenlabs_conversation_id = f"el-{uuid.uuid4()}"
+    nonce = security.mint_voice_session_nonce(conversation_id)
     resp = client.post(
         "/api/voice/session/started",
-        json={"conversation_id": conversation_id, "elevenlabs_conversation_id": elevenlabs_conversation_id},
+        json={
+            "conversation_id": conversation_id,
+            "elevenlabs_conversation_id": elevenlabs_conversation_id,
+            "session_nonce": nonce,
+        },
     )
     assert resp.status_code == 200
     assert db.get_conversation_id_for_voice_session(elevenlabs_conversation_id) == conversation_id
@@ -338,10 +530,16 @@ def test_full_voice_webhook_flow_persists_channel_voice_rows(client, monkeypatch
     monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
     conversation_id = str(uuid.uuid4())
     elevenlabs_conversation_id = f"el-{uuid.uuid4()}"
-    client.post(
+    nonce = security.mint_voice_session_nonce(conversation_id)
+    started = client.post(
         "/api/voice/session/started",
-        json={"conversation_id": conversation_id, "elevenlabs_conversation_id": elevenlabs_conversation_id},
+        json={
+            "conversation_id": conversation_id,
+            "elevenlabs_conversation_id": elevenlabs_conversation_id,
+            "session_nonce": nonce,
+        },
     )
+    assert started.status_code == 200
 
     body = json.dumps(
         {
@@ -365,3 +563,55 @@ def test_full_voice_webhook_flow_persists_channel_voice_rows(client, monkeypatch
     assert persisted[0]["channel"] == "voice"
     assert persisted[1]["role"] == "avatar"
     assert persisted[1]["channel"] == "voice"
+
+
+@pytest.mark.voice_live
+def test_voice_webhook_retry_against_real_db_recovers_from_partial_failure(client, monkeypatch):
+    """End-to-end against the real voice_sessions/messages tables: a mid-loop
+    failure releases the claim (transcript_saved back to False), and a redelivery
+    completes the transcript without duplicating the turn that already saved."""
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    conversation_id = str(uuid.uuid4())
+    elevenlabs_conversation_id = f"el-{uuid.uuid4()}"
+    db.record_voice_session(elevenlabs_conversation_id, conversation_id)
+
+    body = json.dumps(
+        {
+            "type": "post_call_transcription",
+            "data": {
+                "conversation_id": elevenlabs_conversation_id,
+                "transcript": [
+                    {"role": "user", "message": "First turn survives"},
+                    {"role": "agent", "message": "Second turn fails first try"},
+                ],
+            },
+        }
+    ).encode()
+    header = _sign("shh", int(time.time()), body)
+
+    real_insert = db.insert_message
+    calls = {"count": 0}
+
+    def _fail_on_second_turn(conversation_id, role, content, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise RuntimeError("simulated transient failure")
+        return real_insert(conversation_id, role, content, **kwargs)
+
+    monkeypatch.setattr(db, "insert_message", _fail_on_second_turn)
+    first_attempt = client.post("/api/voice/webhook", content=body, headers={"elevenlabs-signature": header})
+    assert first_attempt.status_code == 500
+
+    after_failure = db.get_conversation_messages(conversation_id)
+    assert len(after_failure) == 1
+    assert after_failure[0]["content"] == "First turn survives"
+
+    monkeypatch.setattr(db, "insert_message", real_insert)
+    header2 = _sign("shh", int(time.time()), body)
+    retry = client.post("/api/voice/webhook", content=body, headers={"elevenlabs-signature": header2})
+    assert retry.status_code == 200
+    assert retry.json()["messages_saved"] == 1  # only the turn that failed last time
+
+    final = db.get_conversation_messages(conversation_id)
+    assert len(final) == 2  # no duplicate of the first turn
+    assert [m["content"] for m in final] == ["First turn survives", "Second turn fails first try"]

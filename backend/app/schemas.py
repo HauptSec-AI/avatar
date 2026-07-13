@@ -1,10 +1,12 @@
 from pydantic import BaseModel, Field
 
+from . import config
+
 
 class ChatRequest(BaseModel):
     conversation_id: str
     name: str | None = None
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=config.MAX_MESSAGE_BODY_CHARS)
 
 
 class AdminLoginRequest(BaseModel):
@@ -12,7 +14,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class AdminMessageRequest(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=config.MAX_MESSAGE_BODY_CHARS)
 
 
 class VoiceSessionRequest(BaseModel):
@@ -22,6 +24,7 @@ class VoiceSessionRequest(BaseModel):
 class VoiceSessionStartedRequest(BaseModel):
     conversation_id: str
     elevenlabs_conversation_id: str = Field(min_length=1)
+    session_nonce: str = Field(min_length=1)
 
 
 class VoiceFaqToolRequest(BaseModel):

@@ -7,7 +7,7 @@ import requests
 from agents import Agent, OpenAIChatCompletionsModel, function_tool, set_tracing_disabled
 from openai import AsyncOpenAI
 
-from . import config
+from . import config, ratelimit
 from .knowledge import build_instructions, find_faq, format_faq_answer
 
 # Tracing requires an OpenAI API key/account we don't have when routing through
@@ -36,6 +36,11 @@ def faq_tool(question_number: int) -> str:
 def send_pushover_notification(message: str) -> str:
     if not config.PUSHOVER_USER or not config.PUSHOVER_TOKEN:
         return "Pushover is not configured; the message was not sent."
+    if not ratelimit.allow_push_notification():
+        # Coarse GLOBAL budget, not per-conversation_id -- a script minting a fresh
+        # conversation_id per request would otherwise dodge the per-conversation
+        # chat rate limit and flood Pushover (see PUSH_TOOL_RATE_LIMIT).
+        return "The human has already been notified several times recently; please try again later."
     response = requests.post(
         "https://api.pushover.net/1/messages.json",
         data={"user": config.PUSHOVER_USER, "token": config.PUSHOVER_TOKEN, "message": message},
