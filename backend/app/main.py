@@ -133,6 +133,12 @@ async def chat(payload: ChatRequest):
 
         full_text = ""
         tools_used: list[str] = []
+        # call_id -> tool_name for calls that have been announced ("tool_called") but
+        # not yet resolved ("tool_output"). A "done" event only tells us a call_id, not
+        # a tool name, so on a two-tool turn assuming "the last one called" (a stack)
+        # mislabels whichever finishes out of call order -- this correlates by the
+        # SDK's own call_id instead.
+        pending_tool_calls: dict[str, str] = {}
         try:
             result = Runner.run_streamed(agent, input=prompt)
             async for event in result.stream_events():
@@ -144,11 +150,22 @@ async def chat(payload: ChatRequest):
                 elif event.type == "run_item_stream_event":
                     if event.name == "tool_called":
                         tool_name = getattr(event.item, "tool_name", None)
+                        call_id = getattr(event.item, "call_id", None)
                         if tool_name:
                             tools_used.append(tool_name)
+                            if call_id:
+                                pending_tool_calls[call_id] = tool_name
                             yield _sse("tool", {"name": tool_name, "status": "called"})
                     elif event.name == "tool_output":
-                        tool_name = tools_used[-1] if tools_used else None
+                        call_id = getattr(event.item, "call_id", None)
+                        tool_name = pending_tool_calls.pop(call_id, None) if call_id else None
+                        if tool_name is None:
+                            # No call_id available (e.g. some hosted tool types) --
+                            # fall back to the oldest still-pending call, or the last
+                            # tool called if none is tracked as pending.
+                            tool_name = next(iter(pending_tool_calls.values()), None) or (
+                                tools_used[-1] if tools_used else None
+                            )
                         yield _sse("tool", {"name": tool_name, "status": "done"})
         except Exception:
             logger.exception("Agent run failed for conversation %s", conversation_id)

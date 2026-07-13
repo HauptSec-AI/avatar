@@ -49,13 +49,14 @@ def _text_delta_event(delta: str):
     return SimpleNamespace(type="raw_response_event", data=data)
 
 
-def _tool_called_event(tool_name: str):
-    item = SimpleNamespace(tool_name=tool_name)
+def _tool_called_event(tool_name: str, call_id: str | None = None):
+    item = SimpleNamespace(tool_name=tool_name, call_id=call_id)
     return SimpleNamespace(type="run_item_stream_event", name="tool_called", item=item)
 
 
-def _tool_output_event():
-    return SimpleNamespace(type="run_item_stream_event", name="tool_output", item=None)
+def _tool_output_event(call_id: str | None = None):
+    item = SimpleNamespace(call_id=call_id) if call_id else None
+    return SimpleNamespace(type="run_item_stream_event", name="tool_output", item=item)
 
 
 class _FakeRunResultStreaming:
@@ -77,9 +78,29 @@ def make_fake_run_streamed(text: str = "Hello from a fake agent.", tool_name: st
     """
     events: list[Any] = []
     if tool_name:
-        events.append(_tool_called_event(tool_name))
-        events.append(_tool_output_event())
+        events.append(_tool_called_event(tool_name, call_id="call_1"))
+        events.append(_tool_output_event(call_id="call_1"))
     events.append(_text_delta_event(text))
+
+    def _fake_run_streamed(agent, input=None, **kwargs):
+        return _FakeRunResultStreaming(events)
+
+    return _fake_run_streamed
+
+
+def make_fake_run_streamed_two_tools_out_of_order(text: str = "Done."):
+    """Two tools called in order [faq_tool, push_tool], but push_tool's output
+    arrives FIRST -- exercises call_id-based correlation of "tool_output" events
+    instead of a naive last-called-therefore-next-done (stack) assumption, which
+    mislabels whichever tool actually finishes out of call order.
+    """
+    events = [
+        _tool_called_event("faq_tool", call_id="call_1"),
+        _tool_called_event("push_tool", call_id="call_2"),
+        _tool_output_event(call_id="call_2"),  # push_tool finishes first
+        _tool_output_event(call_id="call_1"),  # faq_tool finishes second
+        _text_delta_event(text),
+    ]
 
     def _fake_run_streamed(agent, input=None, **kwargs):
         return _FakeRunResultStreaming(events)

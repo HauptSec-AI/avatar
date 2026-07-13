@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app import config, db, knowledge
 from app.main import app
 
-from conftest import make_fake_run_streamed
+from conftest import make_fake_run_streamed, make_fake_run_streamed_two_tools_out_of_order
 
 
 def _parse_sse(raw_lines: list[str]) -> list[tuple[str, dict]]:
@@ -201,6 +201,30 @@ def test_mocked_llm_push_tool_sets_needs_attention(client, monkeypatch):
     avatar_row = persisted[1]
     assert avatar_row["needs_attention"] is True
     assert avatar_row["tool_calls"] == ["push_tool"]
+
+
+def test_two_tool_turn_labels_done_events_by_call_id_not_call_order(client, monkeypatch):
+    """RECS.md: 'Streamed tool-status can mislabel which tool finished on a
+    two-tool turn'. faq_tool is called first, push_tool second, but push_tool's
+    output arrives first -- a naive "last called = next done" assumption would
+    mislabel the SECOND "done" event as push_tool again instead of faq_tool."""
+    monkeypatch.setattr(
+        "agents.Runner.run_streamed",
+        make_fake_run_streamed_two_tools_out_of_order(text="Handled both."),
+    )
+    conversation_id = str(uuid.uuid4())
+    with client.stream(
+        "POST",
+        "/api/chat",
+        json={"conversation_id": conversation_id, "message": "look something up and notify Alex"},
+    ) as resp:
+        assert resp.status_code == 200
+        lines = list(resp.iter_lines())
+
+    events = _parse_sse(lines)
+    tool_events = [(name, data) for name, data in events if name == "tool"]
+    done_names = [data["name"] for name, data in tool_events if data["status"] == "done"]
+    assert done_names == ["push_tool", "faq_tool"]
 
 
 def test_message_over_max_body_length_returns_422(client):
