@@ -442,6 +442,15 @@ def test_voice_webhook_ignores_non_transcript_events(client, monkeypatch):
     assert resp.json()["skipped"]
 
 
+def test_voice_webhook_missing_conversation_id_returns_400(client, monkeypatch):
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    body = json.dumps({"type": "post_call_transcription", "data": {}}).encode()
+    header = _sign("shh", int(time.time()), body)
+    resp = client.post("/api/voice/webhook", content=body, headers={"elevenlabs-signature": header})
+    assert resp.status_code == 400
+    assert "conversation_id" in resp.json()["detail"].lower()
+
+
 def test_voice_webhook_skips_when_claim_fails(client, monkeypatch):
     """Redelivery or unknown session: claim_transcript_write returns None -> no-op 200."""
     monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
