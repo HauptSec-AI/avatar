@@ -50,7 +50,7 @@ On top of this SDK, developed scripts serving two main purposes: analytics and r
 
 ---
 
-### Automated Pre-Assessment Framework for the CMD Independent Security Assessment (ISA) (2024)
+### Automated Pre-Assessment Framework for Independent Security Assessment (ISA) (2024)
 
 Designed and built an automated framework that mirrored the California Military Department's (CMD) Independent Security Assessment (ISA), giving customers a way to gauge their readiness and likely score ahead of the official CMD evaluation. The ISA itself consists of two phases — a compliance audit and a penetration test — and the framework was architected to reflect that same structure, with Splunk serving as the backbone for dashboards and reporting.
 
@@ -128,7 +128,7 @@ Ongoing security-related tooling and experimentation outside of client/employer 
 
 ---
 
-### Freelance & Personal Web Development (2015-Present)
+### Freelance & Personal Web Development (Ongoing)
 
 Over the years, have designed and built websites on an ongoing informal basis — both for personal use and for friends, family, and small businesses. Work has spanned a range of site types, including personal blogs, documentation sites, and small business websites, built with Astro and deployed via Cloudflare Workers.
 
