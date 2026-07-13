@@ -81,7 +81,7 @@ def test_verify_webhook_signature_no_secret_configured(monkeypatch):
 
 def test_build_agent_config_shape(monkeypatch):
     monkeypatch.setattr(config, "ELEVENLABS_VOICE_ID", "voice-123")
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "shh")
     monkeypatch.setattr(config, "ELEVENLABS_LLM", "gpt-4o-mini")
     knowledge.build_instructions.cache_clear()
 
@@ -258,7 +258,7 @@ def test_voice_session_started_rate_limited_after_ten_calls(client, monkeypatch)
 
 
 def test_voice_tool_faq_returns_503_when_secret_not_configured(client, monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "")
     resp = client.post(
         "/api/voice/tools/faq",
         json={"conversation_id": "conv1", "question_number": 1},
@@ -267,7 +267,7 @@ def test_voice_tool_faq_returns_503_when_secret_not_configured(client, monkeypat
 
 
 def test_voice_tool_faq_rejects_wrong_bearer(client, monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "correct-secret")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "correct-secret")
     resp = client.post(
         "/api/voice/tools/faq",
         json={"conversation_id": "conv1", "question_number": 1},
@@ -276,8 +276,29 @@ def test_voice_tool_faq_rejects_wrong_bearer(client, monkeypatch):
     assert resp.status_code == 401
 
 
+def test_voice_tool_secret_is_independent_of_webhook_secret(client, monkeypatch):
+    """RECS.md: 'ELEVENLABS_WEBHOOK_SECRET double-duty (HMAC key + bearer token)' --
+    the two are now genuinely separate; a caller presenting the HMAC key as the tool
+    bearer token must NOT be accepted."""
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "tool-secret-value")
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "webhook-secret-value")
+    resp = client.post(
+        "/api/voice/tools/faq",
+        json={"conversation_id": "conv1", "question_number": 1},
+        headers={"Authorization": "Bearer webhook-secret-value"},
+    )
+    assert resp.status_code == 401
+
+    resp = client.post(
+        "/api/voice/tools/faq",
+        json={"conversation_id": "conv1", "question_number": 1},
+        headers={"Authorization": "Bearer tool-secret-value"},
+    )
+    assert resp.status_code == 200
+
+
 def test_voice_tool_faq_returns_same_answer_as_text_faq_tool(client, monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "correct-secret")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "correct-secret")
     resp = client.post(
         "/api/voice/tools/faq",
         json={"conversation_id": "conv1", "question_number": 1},
@@ -289,7 +310,7 @@ def test_voice_tool_faq_returns_same_answer_as_text_faq_tool(client, monkeypatch
 
 
 def test_voice_tool_faq_unknown_number(client, monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "correct-secret")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "correct-secret")
     resp = client.post(
         "/api/voice/tools/faq",
         json={"conversation_id": "conv1", "question_number": 9999},
@@ -300,7 +321,7 @@ def test_voice_tool_faq_unknown_number(client, monkeypatch):
 
 
 def test_voice_tool_push_calls_pushover_and_marks_used(client, monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "correct-secret")
+    monkeypatch.setattr(config, "ELEVENLABS_TOOL_SECRET", "correct-secret")
 
     calls = {}
 

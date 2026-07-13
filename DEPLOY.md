@@ -88,7 +88,7 @@ flyctl status -a "$APP" >/dev/null 2>&1 || { echo "Creating $APP..."; flyctl app
 
 # 2. Stage secrets from .env (surrounding quotes stripped). PORT/COOKIE_SECURE are
 #    set in fly.toml [env], not here. --stage applies them on the next deploy (one rollout).
-KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_VOICE_ID ELEVENLABS_WEBHOOK_SECRET VOICE_MAX_SESSION_SECONDS ELEVENLABS_LLM"
+KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_VOICE_ID ELEVENLABS_WEBHOOK_SECRET ELEVENLABS_TOOL_SECRET VOICE_MAX_SESSION_SECONDS ELEVENLABS_LLM"
 args=()
 for k in $KEYS; do
   v=$(grep -E "^${k}=" .env | head -1 | cut -d= -f2- || true)
@@ -116,10 +116,10 @@ Set in `scripts/fly.toml` `[env]` (non-sensitive, committed):
 
 Set as **Fly secrets** (sensitive, pulled from `.env` by `deploy.sh`):
 
-`OPENROUTER_API_KEY`, `MODEL`, `OWNER_NAME`, `ADMIN_PASSWORD`, `PUSHOVER_USER`, `PUSHOVER_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION_SECRET`, and (if voice is set up — see [SPEC-VOICE.md](SPEC-VOICE.md)) `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `VOICE_MAX_SESSION_SECONDS`, `ELEVENLABS_LLM`.
+`OPENROUTER_API_KEY`, `MODEL`, `OWNER_NAME`, `ADMIN_PASSWORD`, `PUSHOVER_USER`, `PUSHOVER_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION_SECRET`, and (if voice is set up — see [SPEC-VOICE.md](SPEC-VOICE.md)) `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `ELEVENLABS_TOOL_SECRET`, `VOICE_MAX_SESSION_SECONDS`, `ELEVENLABS_LLM`.
 
 Notes:
-- **Voice secrets** are staged the same way but are optional — `deploy.sh` skips any empty value, so a deployment with no voice setup is unaffected. After deploying, run `scripts/sync_voice_agent.py --base-url https://<your-app>.fly.dev` to point the ElevenLabs agent's tool webhooks at the live URL, and register `https://<your-app>.fly.dev/api/voice/webhook` as the post-call webhook in the ElevenLabs dashboard.
+- **Voice secrets** are staged the same way but are optional — `deploy.sh` skips any empty value, so a deployment with no voice setup is unaffected. After deploying, run `scripts/sync_voice_agent.py --base-url https://<your-app>.fly.dev` to point the ElevenLabs agent's tool webhooks at the live URL, and register `https://<your-app>.fly.dev/api/voice/webhook` as the post-call webhook in the ElevenLabs dashboard. `ELEVENLABS_WEBHOOK_SECRET` (HMAC key for that post-call webhook) and `ELEVENLABS_TOOL_SECRET` (bearer token for the `faq_tool`/`push_tool` webhooks) are deliberately separate secrets — set both distinctly; leaving `ELEVENLABS_TOOL_SECRET` blank falls back to reusing `ELEVENLABS_WEBHOOK_SECRET` (logged as a startup warning) rather than failing.
 - **`SESSION_SECRET`** (now in `.env`) signs the admin session cookie. Setting it explicitly means rotating `ADMIN_PASSWORD` later won't unexpectedly invalidate the session-secret derivation. Use a long random value.
 - **`MODEL`** is whatever is in `.env`. For production, set `MODEL=openai/gpt-5.4-mini` before deploying (this is what the reference deployment runs); `openai/gpt-5.4-nano` is the cheaper dev/test model and the code default. You can change it later with `fly secrets set -a <your-app> MODEL=openai/gpt-5.4-mini`.
 - Secrets can be set/changed any time: `fly secrets set -a avatar-alex KEY=value` (triggers a rolling restart). View names with `fly secrets list -a avatar-alex` (values are never shown).
@@ -156,7 +156,7 @@ Run against `https://avatar-alex.fly.dev`. Use `MODEL=openai/gpt-5.4-nano` for c
 - [x] In DevTools, the admin session cookie has the **`Secure`** flag (confirms `COOKIE_SECURE=1`).
 - [x] `fly logs -a avatar-alex` shows no errors during the above (one real bug was found and fixed during this pass — see note below).
 - [x] Abuse guards work: a >20,000-character message is truncated (note appended), and a 21st message within a minute on one conversation returns HTTP 429 with the slow-down message (no model call).
-- [ ] **Voice** (if configured for this deployment — see SPEC-VOICE.md): `fly secrets list -a avatar-alex` shows `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET` are staged (names only — values are never shown).
+- [ ] **Voice** (if configured for this deployment — see SPEC-VOICE.md): `fly secrets list -a avatar-alex` shows `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `ELEVENLABS_TOOL_SECRET` are staged as *distinct* secrets (names only — values are never shown).
 - [ ] `curl -s -X POST https://avatar-alex.fly.dev/api/voice/session -H 'Content-Type: application/json' -d '{"conversation_id":"<a-fresh-uuid>"}'` returns a real `token`/`session_nonce` (200), not `503` — confirms `ELEVENLABS_API_KEY` is valid and `ELEVENLABS_AGENT_ID` resolves end-to-end, per SPEC-VOICE.md "Setup and Validation" step 6.
 - [ ] `/voice` loads (dark + light) and the inline "Talk live" launcher appears on `/`.
 - [ ] One real live call end-to-end: reaches `push_tool` or `faq_tool`, ends, and the finished transcript appears in the same admin thread with the mic channel badge (SPEC-VOICE.md's own success criteria). Run this sparingly — it bills ElevenLabs call-minutes — not on every deploy.

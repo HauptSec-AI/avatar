@@ -44,7 +44,22 @@ COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
+# Signs/verifies the post-call transcript webhook's HMAC signature -- ONLY that.
 ELEVENLABS_WEBHOOK_SECRET = os.environ.get("ELEVENLABS_WEBHOOK_SECRET", "")
+# Bearer token the two tool webhooks (faq_tool/push_tool) check -- a separate secret
+# from the HMAC key above, so a leak of one doesn't compromise the other. Falls back
+# to ELEVENLABS_WEBHOOK_SECRET (with a warning) only when voice is otherwise
+# configured, so text-only deployments that never set either stay silent.
+ELEVENLABS_TOOL_SECRET = os.environ.get("ELEVENLABS_TOOL_SECRET", "")
+if not ELEVENLABS_TOOL_SECRET and ELEVENLABS_WEBHOOK_SECRET:
+    ELEVENLABS_TOOL_SECRET = _derive_secret(
+        "",
+        ELEVENLABS_WEBHOOK_SECRET,
+        "ELEVENLABS_TOOL_SECRET",
+        "falling back to ELEVENLABS_WEBHOOK_SECRET for the voice tool webhooks' bearer "
+        "auth too. Set a separate ELEVENLABS_TOOL_SECRET so the webhook HMAC key and the "
+        "tool bearer token aren't the same value.",
+    )
 VOICE_MAX_SESSION_SECONDS = int(os.environ.get("VOICE_MAX_SESSION_SECONDS", "600"))
 # ElevenLabs-managed LLM for voice, independent of MODEL/OPENROUTER_API_KEY (text chat).
 # Custom LLM (routing voice through OpenRouter, like text) isn't allowed on agents using

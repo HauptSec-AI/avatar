@@ -91,9 +91,10 @@ def _tool_webhook_url(base_url: str, path: str) -> str:
 
 
 def _tool_auth_headers() -> dict:
-    # Static bearer header ElevenLabs sends on every tool call; our backend checks
-    # it in security.require_voice_tool_secret (both sides read ELEVENLABS_WEBHOOK_SECRET).
-    return {"Authorization": f"Bearer {config.ELEVENLABS_WEBHOOK_SECRET}"}
+    # Static bearer header ElevenLabs sends on every tool call; our backend checks it
+    # in security.require_voice_tool_secret (both sides read ELEVENLABS_TOOL_SECRET --
+    # a dedicated secret, separate from ELEVENLABS_WEBHOOK_SECRET's HMAC-signing use).
+    return {"Authorization": f"Bearer {config.ELEVENLABS_TOOL_SECRET}"}
 
 
 VOICE_PROMPT_ADDENDUM = """

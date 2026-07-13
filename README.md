@@ -146,6 +146,7 @@ ELEVENLABS_API_KEY=...
 ELEVENLABS_AGENT_ID=
 ELEVENLABS_VOICE_ID=...
 ELEVENLABS_WEBHOOK_SECRET=a-long-random-string
+ELEVENLABS_TOOL_SECRET=a-different-long-random-string
 VOICE_MAX_SESSION_SECONDS=600
 ELEVENLABS_LLM=gpt-4o-mini
 ```
@@ -154,7 +155,7 @@ ELEVENLABS_LLM=gpt-4o-mini
 
 1. **Clone your voice.** In the ElevenLabs dashboard, go to **Voices > Add a voice** and create an Instant or Professional Voice Clone (see their docs for sample-audio requirements). Copy the resulting voice id into `ELEVENLABS_VOICE_ID`.
 2. **Get an API key.** In the dashboard, go to **Profile > API Keys**, create one with full Conversational AI (`convai`) read+write permissions (a narrowly-scoped key will fail with `missing_permissions` errors), and add it to `ELEVENLABS_API_KEY`. Leave `ELEVENLABS_AGENT_ID` blank for now — the next step creates it.
-3. **Generate a webhook secret** (e.g. `openssl rand -hex 32`) and set `ELEVENLABS_WEBHOOK_SECRET`. This both signs the post-call transcript webhook and authenticates the two tool webhooks (`faq_tool`, `push_tool`) — it's the same value on both ends.
+3. **Generate two secrets** (e.g. `openssl rand -hex 32` twice) and set `ELEVENLABS_WEBHOOK_SECRET` (signs the post-call transcript webhook) and `ELEVENLABS_TOOL_SECRET` (authenticates the two tool webhooks, `faq_tool`/`push_tool`) — deliberately different values, so a leak of one doesn't also compromise the other. If you leave `ELEVENLABS_TOOL_SECRET` blank, the app falls back to reusing `ELEVENLABS_WEBHOOK_SECRET` for it (with a startup warning) rather than failing outright.
 4. **Run the migration below** (Supabase SQL Editor, same as the `messages` table setup).
 5. **Provision the agent:**
    ```

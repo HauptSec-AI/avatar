@@ -51,11 +51,13 @@ def verify_voice_session_nonce(nonce: str, conversation_id: str) -> bool:
 
 def require_voice_tool_secret(request: Request) -> None:
     """Guards /api/voice/tools/*: these trigger real side effects (a Pushover push),
-    so they're not left open to anyone who finds the URL. ELEVENLABS_WEBHOOK_SECRET
-    doubles as this shared secret -- configure the same value as a custom auth header
-    on both webhook tools in the ElevenLabs agent config (see sync_voice_agent.py)."""
-    if not config.ELEVENLABS_WEBHOOK_SECRET:
+    so they're not left open to anyone who finds the URL. ELEVENLABS_TOOL_SECRET is a
+    dedicated bearer secret for this -- separate from ELEVENLABS_WEBHOOK_SECRET (the
+    post-call webhook's HMAC key) so a leak of one doesn't compromise the other --
+    configured as a custom auth header on both webhook tools in the ElevenLabs agent
+    config (see sync_voice_agent.py)."""
+    if not config.ELEVENLABS_TOOL_SECRET:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Voice not configured")
-    expected = f"Bearer {config.ELEVENLABS_WEBHOOK_SECRET}"
+    expected = f"Bearer {config.ELEVENLABS_TOOL_SECRET}"
     if request.headers.get("authorization") != expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
