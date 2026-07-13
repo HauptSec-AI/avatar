@@ -332,8 +332,12 @@ def test_voice_tool_push_calls_pushover_and_marks_used(client, monkeypatch):
     def _fake_mark_used(cid):
         calls["conversation_id"] = cid
 
+    def _fake_flag_latest(cid):
+        calls["flagged_conversation_id"] = cid
+
     monkeypatch.setattr(agent_runner, "send_pushover_notification", _fake_pushover)
     monkeypatch.setattr(db, "mark_push_tool_used", _fake_mark_used)
+    monkeypatch.setattr(db, "flag_latest_message_if_any", _fake_flag_latest)
 
     resp = client.post(
         "/api/voice/tools/push",
@@ -344,6 +348,31 @@ def test_voice_tool_push_calls_pushover_and_marks_used(client, monkeypatch):
     assert resp.json()["result"] == "sent"
     assert calls["message"] == "visitor wants to connect"
     assert calls["conversation_id"] == "conv1"
+    assert calls["flagged_conversation_id"] == "conv1"
+
+
+def test_flag_latest_message_if_any_flags_the_most_recent_row(client):
+    """RECS.md: 'Voice needs_attention only sets on post-call webhook, not live
+    mid-call as spec'd'. When the conversation already has history (e.g. the
+    visitor texted before switching to voice), push_tool firing mid-call should
+    flag it immediately rather than waiting for the post-call webhook."""
+    conversation_id = str(uuid.uuid4())
+    db.insert_message(conversation_id, "visitor", "hello")
+    second = db.insert_message(conversation_id, "avatar", "hi there")
+
+    db.flag_latest_message_if_any(conversation_id)
+
+    rows = db.get_conversation_messages(conversation_id)
+    by_id = {r["id"]: r for r in rows}
+    assert by_id[second["id"]]["needs_attention"] is True
+
+
+def test_flag_latest_message_if_any_is_a_no_op_with_no_rows_yet(client):
+    """A voice-only conversation's very first turn has no row to flag until the
+    post-call webhook writes the transcript -- must not raise."""
+    conversation_id = str(uuid.uuid4())
+    db.flag_latest_message_if_any(conversation_id)  # no rows exist; should not raise
+    assert db.get_conversation_messages(conversation_id) == []
 
 
 # ---------------------------------------------------------------------------

@@ -230,6 +230,7 @@ async def voice_tool_faq(payload: VoiceFaqToolRequest):
 async def voice_tool_push(payload: VoicePushToolRequest):
     result = await asyncio.to_thread(agent_runner.send_pushover_notification, payload.message)
     db.mark_push_tool_used(payload.conversation_id)
+    db.flag_latest_message_if_any(payload.conversation_id)
     return {"result": result}
 
 

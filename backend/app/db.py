@@ -184,6 +184,29 @@ def mark_push_tool_used(conversation_id: str) -> None:
     ).eq("transcript_saved", False).execute()
 
 
+def flag_latest_message_if_any(conversation_id: str) -> None:
+    """Best-effort LIVE needs_attention flag for a voice call, per SPEC-VOICE.md
+    ("the moment push_tool fires mid-call, ... needs_attention immediately"): sets
+    it on the most recent existing row for this conversation, if there is one --
+    e.g. the visitor texted before switching to voice, or a prior voice call in
+    this same thread already wrote its transcript. If this call is the very first
+    turn ever in this conversation, there's no row yet to flag; the post-call
+    webhook's claim-based flagging (mark_push_tool_used + claim_transcript_write)
+    still covers that case once the transcript lands. Pushover itself already
+    fired live regardless, via the same call site as this function."""
+    result = (
+        get_client()
+        .table(TABLE)
+        .select("id")
+        .eq("conversation_id", conversation_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        set_needs_attention(result.data[0]["id"])
+
+
 def claim_transcript_write(elevenlabs_conversation_id: str) -> dict[str, Any] | None:
     """Atomically claim the right to write this call's transcript, exactly once.
 
