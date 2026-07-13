@@ -210,7 +210,9 @@ alter table public.messages
 create table public.voice_sessions (
   elevenlabs_conversation_id text primary key,
   conversation_id             uuid not null,
-  started_at                  timestamptz not null default now()
+  started_at                  timestamptz not null default now(),
+  transcript_saved            boolean not null default false,
+  push_tool_used              boolean not null default false
 );
 
 grant select, insert, update, delete on public.voice_sessions to service_role;
