@@ -7,6 +7,7 @@ import {
   adminOpenConversation,
   adminPostMessage,
   adminResolveConversation,
+  getConversation,
 } from "./api";
 import { escapeHtml } from "./markdown";
 import { formatTime, initials, renderMessageHTML } from "./render";
@@ -319,8 +320,12 @@ async function pollTick(): Promise<void> {
   }
   renderSidebar();
   if (activeConversationId) {
+    // Read-only refresh -- adminOpenConversation() also marks read + clears
+    // needs_attention, which is correct for a deliberate click but wrong here: a
+    // poll tick firing right after a new flagged message arrives would silently
+    // clear the flag before the human actually notices (RECS.md).
     try {
-      const rows = await adminOpenConversation(activeConversationId);
+      const rows = await getConversation(activeConversationId);
       appendThreadRows(rows);
       renderThreadHeader(activeConversationId);
     } catch {

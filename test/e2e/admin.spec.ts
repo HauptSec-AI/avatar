@@ -170,6 +170,39 @@ test.describe("Admin dashboard", () => {
     await expect(row).not.toHaveClass(/is-attention/);
   });
 
+  test("poll does not silently re-clear needs_attention on the already-open thread", async ({ page, request }) => {
+    // RECS.md: "Admin's own poll re-clears needs_attention before the human
+    // notices". Open the thread (clears the flag, as expected for a deliberate
+    // click), re-trigger it while still open (a real 2nd contact-capture flow on
+    // the same conversation), then wait past a poll tick (10s) and confirm the
+    // flag survives instead of the poll silently clearing it again.
+    test.setTimeout(60_000);
+    const conversationId = await seedContactCaptureConversation(request);
+    await loginAsAdmin(page);
+    await page.reload();
+    const row = page.locator(`.convo-item[data-id="${conversationId}"]`);
+    await expect(row).toHaveClass(/is-attention/, { timeout: 15_000 });
+
+    await row.click();
+    await expect(page.locator("#threadView")).toBeVisible();
+    await expect(row).not.toHaveClass(/is-attention/); // the deliberate open cleared it
+
+    await request.post("/api/chat", {
+      data: { conversation_id: conversationId, message: "Actually, can you connect me with the human again?" },
+    });
+    await request.post("/api/chat", {
+      data: { conversation_id: conversationId, message: "My email is retest-poll@example.com" },
+    });
+    await expect(row).toHaveClass(/is-attention/, { timeout: 15_000 });
+    await expect(page.locator("#attnFlag")).toBeVisible();
+
+    // Past a poll tick (POLL_MS = 10s): without the fix, pollTick() re-fetches the
+    // open thread via the mutating admin endpoint and silently clears this again.
+    await page.waitForTimeout(12_000);
+    await expect(row).toHaveClass(/is-attention/);
+    await expect(page.locator("#attnFlag")).toBeVisible();
+  });
+
   test("logout returns to the login gate", async ({ page }) => {
     await loginAsAdmin(page);
     await page.click("#logoutBtn");
