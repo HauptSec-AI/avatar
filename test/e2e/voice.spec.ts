@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loadRootEnv } from "./helpers";
+import { clearSessionCap, scheduleSessionCap } from "../../frontend/src/sessionCap";
 
 const ADMIN_PASSWORD = loadRootEnv().ADMIN_PASSWORD!;
 
@@ -165,5 +166,32 @@ test.describe("Voice", () => {
     await page.locator(".convo-item").first().click();
     await expect(page.locator(".channel-tag")).toBeVisible();
     await expect(page.locator(".channel-tag")).toHaveAttribute("title", /voice call/i);
+  });
+
+  // RECS.md: "Voice session-duration cap has no test coverage" -- onConnect (which
+  // schedules the cap) only fires on a real successful WebRTC connection, which the
+  // rest of this file deliberately never drives (see the file-level comment above).
+  // scheduleSessionCap/clearSessionCap are pure and SDK-free (see sessionCap.ts), so
+  // test the actual timer logic directly rather than faking a whole voice connection.
+  test("session-duration cap: scheduleSessionCap fires after the configured duration", async ({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "pure timer logic; no need to run per browser project");
+    let capped = false;
+    const timer = scheduleSessionCap(0.05, () => {
+      capped = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(capped).toBe(true);
+    clearSessionCap(timer);
+  });
+
+  test("session-duration cap: clearSessionCap prevents a scheduled cap from firing", async ({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "pure timer logic; no need to run per browser project");
+    let capped = false;
+    const timer = scheduleSessionCap(0.05, () => {
+      capped = true;
+    });
+    clearSessionCap(timer);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(capped).toBe(false);
   });
 });

@@ -53,7 +53,7 @@ primary_region = "sjc"               # closest Fly region to the Supabase us-wes
 
   [[http_service.checks]]
     method = "GET"
-    path = "/api/config"             # returns 200 with no DB hit — a clean health check
+    path = "/api/health"             # touches Supabase -- a DB outage fails this, not just "process is alive"
     interval = "15s"
     timeout = "3s"
     grace_period = "10s"
@@ -146,7 +146,8 @@ Run against `https://avatar-alex.fly.dev`. Use `MODEL=openai/gpt-5.4-nano` for c
 
 - [x] `fly status -a avatar-alex` — 1 machine in `sjc`, state `started`, health check **passing**.
 - [x] `curl -s https://avatar-alex.fly.dev/api/config` → `{"owner_name":"..."}` (200).
-- [x] `/` loads the visitor UI (dark + light, desktop + mobile); the rings background and the LinkedIn/GitHub/Credly footer render.
+- [ ] `curl -s https://avatar-alex.fly.dev/api/health` → `{"ok":true}` (200) — this is now the actual `fly.toml` health-check target (it touches Supabase; `/api/config` above doesn't, so it can't catch a DB outage on its own). Added after `/api/config` was already the target on the live reference deployment — re-run `scripts/deploy.sh` for the `fly.toml` change to take effect before checking this off.
+- [x] `/` loads the visitor UI (dark + light, desktop + mobile); the background grid texture and the LinkedIn/GitHub/Credly footer render (see `design-system/docs/background-texture.md` for what's actually shipped — it's a plain grid, not the rings variant an earlier draft of that doc described).
 - [x] A normal question streams a reply (real LLM call); `Q2` returns the instant FAQ; `https://avatar-alex.fly.dev/?q=2` opens and immediately answers Q2.
 - [x] FAQ routing works (e.g. ask about certifications → `faq_tool`), and links in replies are clickable.
 - [x] `/admin` → wrong password rejected; correct `ADMIN_PASSWORD` opens the dashboard; the inbox lists conversations and a thread opens quickly.
@@ -155,6 +156,10 @@ Run against `https://avatar-alex.fly.dev`. Use `MODEL=openai/gpt-5.4-nano` for c
 - [x] In DevTools, the admin session cookie has the **`Secure`** flag (confirms `COOKIE_SECURE=1`).
 - [x] `fly logs -a avatar-alex` shows no errors during the above (one real bug was found and fixed during this pass — see note below).
 - [x] Abuse guards work: a >20,000-character message is truncated (note appended), and a 21st message within a minute on one conversation returns HTTP 429 with the slow-down message (no model call).
+- [ ] **Voice** (if configured for this deployment — see SPEC-VOICE.md): `fly secrets list -a avatar-alex` shows `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_WEBHOOK_SECRET` are staged (names only — values are never shown).
+- [ ] `curl -s -X POST https://avatar-alex.fly.dev/api/voice/session -H 'Content-Type: application/json' -d '{"conversation_id":"<a-fresh-uuid>"}'` returns a real `token`/`session_nonce` (200), not `503` — confirms `ELEVENLABS_API_KEY` is valid and `ELEVENLABS_AGENT_ID` resolves end-to-end, per SPEC-VOICE.md "Setup and Validation" step 6.
+- [ ] `/voice` loads (dark + light) and the inline "Talk live" launcher appears on `/`.
+- [ ] One real live call end-to-end: reaches `push_tool` or `faq_tool`, ends, and the finished transcript appears in the same admin thread with the mic channel badge (SPEC-VOICE.md's own success criteria). Run this sparingly — it bills ElevenLabs call-minutes — not on every deploy.
 - [x] Clean up: delete the test conversation threads from Supabase and any screenshots.
 
 > **First live smoke test caught a real bug:** `.env`'s `MODEL` had gotten corrupted to

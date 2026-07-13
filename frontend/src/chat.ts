@@ -2,6 +2,7 @@ import "./styles/chat.css";
 import { getConfig, getConversation, postChat } from "./api";
 import { deleteCookie, getCookie, setCookie } from "./cookies";
 import { renderMarkdown } from "./markdown";
+import { pollIntervalMs } from "./pollSchedule";
 import { initials, instantTagHtml, renderMessageHTML } from "./render";
 import { setupThemeToggle } from "./theme";
 import type { Message } from "./types";
@@ -9,9 +10,6 @@ import type { MountedVoiceCall } from "./voiceUI";
 
 const COOKIE_NAME = "avatar_conversation_id";
 const NAME_STORAGE_KEY = "avatar-name";
-const POLL_FAST_MS = 10_000;
-const POLL_SLOW_MS = 60_000;
-const POLL_SLOWDOWN_AFTER_MS = 5 * 60_000;
 
 const convoEl = document.getElementById("convo") as HTMLDivElement;
 const convoInner = document.getElementById("convoInner") as HTMLDivElement;
@@ -288,8 +286,7 @@ function ensurePolling(): void {
 }
 
 function scheduleNextPoll(): void {
-  const idleMs = Date.now() - lastActivityAt;
-  const interval = idleMs > POLL_SLOWDOWN_AFTER_MS ? POLL_SLOW_MS : POLL_FAST_MS;
+  const interval = pollIntervalMs(Date.now() - lastActivityAt);
   pollTimer = window.setTimeout(() => {
     void pollForUpdates().finally(scheduleNextPoll);
   }, interval);

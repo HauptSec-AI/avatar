@@ -29,7 +29,7 @@ primary_region = 'sjc'
     timeout = '3s'
     grace_period = '10s'
     method = 'GET'
-    path = '/api/config'
+    path = '/api/health'
 
 [[vm]]
   size = 'shared-cpu-2x'

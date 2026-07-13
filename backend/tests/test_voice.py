@@ -17,7 +17,17 @@ import uuid
 import pytest
 import requests
 
-from app import agent_runner, config, db, knowledge, security, voice
+from app import agent_runner, config, db, knowledge, ratelimit, security, voice
+
+
+@pytest.fixture(autouse=True)
+def _reset_voice_webhook_limiter():
+    """The webhook tests below share one TestClient IP ("testclient"); clear the
+    bucket before/after each test so unrelated tests can't tip the rate-limit test
+    (or vice versa)."""
+    ratelimit._limiter.clear(ratelimit._voice_webhook_rate, "voice_webhook", "testclient")
+    yield
+    ratelimit._limiter.clear(ratelimit._voice_webhook_rate, "voice_webhook", "testclient")
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +338,49 @@ def test_voice_webhook_rejects_invalid_signature(client, monkeypatch):
         headers={"elevenlabs-signature": "t=1,v0=deadbeef"},
     )
     assert resp.status_code == 401
+
+
+def test_voice_webhook_signature_failure_does_not_log_body_or_header_values(client, monkeypatch, caplog):
+    """RECS.md: 'Failed voice-webhook signature checks log full headers + transcript
+    body' -- both are visitor PII (a captured email, say). Only shape may be logged."""
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    secret_looking_header_value = "super-secret-header-value-should-never-appear"
+    body_with_pii = b'{"type": "post_call_transcription", "data": {"transcript": "visitor@example.com"}}'
+    with caplog.at_level("WARNING", logger="avatar"):
+        resp = client.post(
+            "/api/voice/webhook",
+            content=body_with_pii,
+            headers={
+                "elevenlabs-signature": "t=1,v0=deadbeef",
+                "x-test-marker": secret_looking_header_value,
+            },
+        )
+    assert resp.status_code == 401
+    log_text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "visitor@example.com" not in log_text
+    assert secret_looking_header_value not in log_text
+    assert "deadbeef" not in log_text
+    # Shape is still logged, so a real failure stays diagnosable.
+    assert "signature_header_present=True" in log_text
+    assert "x-test-marker" in log_text  # header NAME is fine, just not its value
+
+
+def test_voice_webhook_rate_limited_after_thirty_calls(client, monkeypatch):
+    monkeypatch.setattr(config, "ELEVENLABS_WEBHOOK_SECRET", "shh")
+    for _ in range(30):
+        resp = client.post(
+            "/api/voice/webhook",
+            content=b'{"type": "post_call_transcription", "data": {}}',
+            headers={"elevenlabs-signature": "t=1,v0=deadbeef"},
+        )
+        assert resp.status_code == 401  # bad signature, but still counted
+
+    resp = client.post(
+        "/api/voice/webhook",
+        content=b'{"type": "post_call_transcription", "data": {}}',
+        headers={"elevenlabs-signature": "t=1,v0=deadbeef"},
+    )
+    assert resp.status_code == 429
 
 
 def test_voice_webhook_ignores_non_transcript_events(client, monkeypatch):

@@ -54,5 +54,7 @@ MAX_MESSAGE_BODY_CHARS = 100_000  # hard cap on the raw field so an oversized bo
 # rejected outright rather than silently buffered in full before the 20k clamp runs
 MAX_REQUEST_BODY_BYTES = 2_000_000  # ~2MB global ceiling across every route (defense in
 # depth for routes with no per-field max_length, e.g. the voice webhook's raw body)
+VOICE_WEBHOOK_RATE_LIMIT = "30/minute"  # per client IP -- generous for legit ElevenLabs
+# retries, caps an unauthenticated caller from hammering the signature check
 
 ADMIN_SESSION_COOKIE = "avatar_admin_session"

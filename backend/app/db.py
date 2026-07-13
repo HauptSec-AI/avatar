@@ -63,6 +63,13 @@ def set_needs_attention(message_id: int) -> None:
     get_client().table(TABLE).update({"needs_attention": True}).eq("id", message_id).execute()
 
 
+def health_check() -> None:
+    """Cheapest possible real round-trip to Supabase -- raises if unreachable or
+    misconfigured. Used by /api/health so the Fly health check catches a DB outage
+    instead of only confirming the process is alive."""
+    get_client().table(TABLE).select("id").limit(1).execute()
+
+
 def get_conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
     result = (
         get_client()

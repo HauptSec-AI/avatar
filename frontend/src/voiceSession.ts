@@ -1,5 +1,6 @@
 import { VoiceConversation } from "@elevenlabs/client";
 import { notifyVoiceSessionStarted, startVoiceSession, VoiceSessionError } from "./api";
+import { clearSessionCap, scheduleSessionCap } from "./sessionCap";
 
 export type CallStatus = "connecting" | "connected" | "disconnecting" | "disconnected";
 export type CallMode = "speaking" | "listening";
@@ -44,7 +45,7 @@ export async function startVoiceCall(
   }
 
   let muted = false;
-  let sessionCapTimer: number | undefined;
+  let sessionCapTimer: ReturnType<typeof setTimeout> | undefined;
   let conversation: Awaited<ReturnType<typeof VoiceConversation.startSession>>;
 
   try {
@@ -63,9 +64,9 @@ export async function startVoiceCall(
         // backstops are the same as text chat: rate-limited session minting
         // (/api/voice/session) and ElevenLabs' own account-level spend/concurrency
         // caps (see SPEC-VOICE.md).
-        sessionCapTimer = window.setTimeout(() => {
+        sessionCapTimer = scheduleSessionCap(session.maxSessionSeconds, () => {
           void conversation?.endSession();
-        }, session.maxSessionSeconds * 1000);
+        });
       },
       onStatusChange: ({ status }) => callbacks.onStatusChange(status),
       onModeChange: ({ mode }) => callbacks.onModeChange(mode),
@@ -76,7 +77,7 @@ export async function startVoiceCall(
       onAgentToolResponse: (props) => callbacks.onToolStatus(props.tool_name, "done"),
       onError: (message) => callbacks.onError(message),
       onDisconnect: () => {
-        if (sessionCapTimer !== undefined) window.clearTimeout(sessionCapTimer);
+        clearSessionCap(sessionCapTimer);
       },
     });
   } catch (e) {

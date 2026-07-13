@@ -65,6 +65,19 @@ async def get_config():
     return {"owner_name": config.OWNER_NAME}
 
 
+@app.get("/api/health")
+async def health():
+    # /api/config (used as the Fly health check target until now) returns 200 with
+    # no DB hit, so a Supabase outage looked "healthy" forever. This one actually
+    # touches the database.
+    try:
+        db.health_check()
+    except Exception:
+        logger.exception("Health check failed: Supabase unreachable")
+        raise HTTPException(status_code=503, detail="Database unreachable") from None
+    return {"ok": True}
+
+
 @app.get("/api/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):
     _validate_conversation_id(conversation_id)
@@ -222,17 +235,21 @@ async def voice_tool_push(payload: VoicePushToolRequest):
 
 @app.post("/api/voice/webhook")
 async def voice_webhook(request: Request):
+    if not ratelimit.allow_voice_webhook(_client_ip(request)):
+        return JSONResponse(status_code=429, content={"error": "Too many requests."})
+
     raw_body = await request.body()
     signature_header = request.headers.get("elevenlabs-signature")
     if not voice.verify_webhook_signature(raw_body, signature_header):
-        # Signature format hasn't been exercised against a real payload yet (see
-        # SPEC-VOICE.md's open items) -- log what we actually received so a live
-        # failure is diagnosable without another debug-script round trip.
+        # Never log the body (transcript text is visitor PII, e.g. a captured email)
+        # or header VALUES -- only shape, so a live failure is still diagnosable
+        # without leaking anything into Fly's log stream.
         logger.warning(
-            "Voice webhook signature check failed. header=%r all_headers=%r body_preview=%r",
-            signature_header,
-            dict(request.headers),
-            raw_body[:500],
+            "Voice webhook signature check failed. signature_header_present=%s "
+            "content_length=%d header_names=%s",
+            bool(signature_header),
+            len(raw_body),
+            sorted(request.headers.keys()),
         )
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 

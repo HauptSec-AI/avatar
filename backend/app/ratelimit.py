@@ -18,6 +18,7 @@ _admin_login_rate = parse(config.ADMIN_LOGIN_RATE_LIMIT)
 _admin_login_lockout_rate = parse(config.ADMIN_LOGIN_LOCKOUT_LIMIT)
 _voice_session_started_rate = parse(config.VOICE_SESSION_STARTED_RATE_LIMIT)
 _push_tool_rate = parse(config.PUSH_TOOL_RATE_LIMIT)
+_voice_webhook_rate = parse(config.VOICE_WEBHOOK_RATE_LIMIT)
 
 
 def allow_chat_message(conversation_id: str) -> bool:
@@ -37,6 +38,10 @@ def allow_push_notification() -> bool:
     /api/voice/tools/push), deliberately keyed with no per-conversation_id
     identifier -- see PUSH_TOOL_RATE_LIMIT."""
     return _limiter.hit(_push_tool_rate, "push_tool_global")
+
+
+def allow_voice_webhook(client_ip: str) -> bool:
+    return _limiter.hit(_voice_webhook_rate, "voice_webhook", client_ip)
 
 
 def allow_admin_login_attempt(client_ip: str) -> bool:

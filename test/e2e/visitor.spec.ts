@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { pollIntervalMs, POLL_FAST_MS, POLL_SLOW_MS, POLL_SLOWDOWN_AFTER_MS } from "../../frontend/src/pollSchedule";
 
 const SHOT = (name: string, project: string) => `screenshots/visitor/${name}-${project}.png`;
 
@@ -168,6 +169,16 @@ test.describe("Visitor chat", () => {
     const visitorRow = body.messages.find((m: { role: string }) => m.role === "visitor");
     expect(visitorRow.content.length).toBeLessThan(20_100);
     expect(visitorRow.content).toContain("[...message truncated");
+  });
+
+  // RECS.md: "10s->60s poll slowdown has no test coverage". pollIntervalMs is pure
+  // (see pollSchedule.ts) so the slowdown boundary is tested directly rather than
+  // waiting 5 real minutes of idle time in a browser.
+  test("poll slowdown: pollIntervalMs switches from 10s to 60s after 5 idle minutes", async ({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "pure logic; no need to run per browser project");
+    expect(pollIntervalMs(0)).toBe(POLL_FAST_MS);
+    expect(pollIntervalMs(POLL_SLOWDOWN_AFTER_MS)).toBe(POLL_FAST_MS); // boundary itself: still fast
+    expect(pollIntervalMs(POLL_SLOWDOWN_AFTER_MS + 1)).toBe(POLL_SLOW_MS);
   });
 });
 
