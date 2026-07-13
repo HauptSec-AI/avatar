@@ -1,12 +1,26 @@
 """Environment configuration, loaded once from the project-root .env."""
 
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger("avatar")
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env", override=True)
+
+
+def _derive_secret(explicit: str, fallback: str, name: str, reason: str) -> str:
+    """Returns `explicit` if set; otherwise falls back to `fallback` and logs a
+    warning (once, at import time) so a silently-derived secret doesn't go
+    unnoticed in production."""
+    if explicit:
+        return explicit
+    logger.warning("%s is not set -- %s", name, reason)
+    return fallback
+
 
 OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
 MODEL = os.environ.get("MODEL", "openai/gpt-5.4-nano")
@@ -16,7 +30,13 @@ PUSHOVER_USER = os.environ.get("PUSHOVER_USER", "")
 PUSHOVER_TOKEN = os.environ.get("PUSHOVER_TOKEN", "")
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-SESSION_SECRET = os.environ.get("SESSION_SECRET") or f"avatar::{ADMIN_PASSWORD}"
+SESSION_SECRET = _derive_secret(
+    os.environ.get("SESSION_SECRET", ""),
+    f"avatar::{ADMIN_PASSWORD}",
+    "SESSION_SECRET",
+    "deriving it from ADMIN_PASSWORD instead. Set an explicit value for production so "
+    "rotating ADMIN_PASSWORD doesn't also invalidate every admin session.",
+)
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 
 # Voice (SPEC-VOICE.md) -- all optional. The app runs fine without voice configured;
