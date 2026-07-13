@@ -26,4 +26,5 @@ pythonpath = ["."]
 markers = [
     "llm: tests that call the language model (cost tokens)",
     "voice_live: tests that need the voice_sessions/channel Supabase migration applied (see SPEC-VOICE.md)",
+    "elevenlabs_live: tests that need real ELEVENLABS_API_KEY/ELEVENLABS_AGENT_ID configured and hit the real ElevenLabs API",
 ]
