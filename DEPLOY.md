@@ -36,8 +36,10 @@ app = "avatar-alex"
 primary_region = "sjc"               # closest Fly region to the Supabase us-west-2 (Oregon) DB
 
 [env]
-  PORT = "8000"                      # matches the Dockerfile's uvicorn --port
   COOKIE_SECURE = "1"                # production is HTTPS -> admin session cookie must be Secure
+  # No PORT here: the Dockerfile's CMD hardcodes --port 8000 (uvicorn doesn't read
+  # $PORT), and [http_service].internal_port below is a separate static setting that
+  # must match it by hand -- a PORT var wouldn't actually change anything.
 
 [http_service]
   internal_port = 8000
@@ -86,8 +88,8 @@ flyctl auth whoami >/dev/null || { echo "Not logged in — run 'fly auth login'"
 # 1. Create the app on first run (name must be globally unique).
 flyctl status -a "$APP" >/dev/null 2>&1 || { echo "Creating $APP..."; flyctl apps create "$APP"; }
 
-# 2. Stage secrets from .env (surrounding quotes stripped). PORT/COOKIE_SECURE are
-#    set in fly.toml [env], not here. --stage applies them on the next deploy (one rollout).
+# 2. Stage secrets from .env (surrounding quotes stripped). COOKIE_SECURE is set in
+#    fly.toml [env], not here. --stage applies them on the next deploy (one rollout).
 KEYS="OPENROUTER_API_KEY MODEL OWNER_NAME ADMIN_PASSWORD PUSHOVER_USER PUSHOVER_TOKEN SUPABASE_URL SUPABASE_KEY SESSION_SECRET ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_VOICE_ID ELEVENLABS_WEBHOOK_SECRET ELEVENLABS_TOOL_SECRET VOICE_MAX_SESSION_SECONDS ELEVENLABS_LLM"
 args=()
 for k in $KEYS; do
@@ -111,8 +113,11 @@ Set in `scripts/fly.toml` `[env]` (non-sensitive, committed):
 
 | Var | Value | Why |
 |---|---|---|
-| `PORT` | `8000` | matches the Dockerfile's uvicorn port / `internal_port` |
 | `COOKIE_SECURE` | `1` | production is HTTPS, so the admin session cookie must be `Secure` (it defaults off so local http works) |
+
+The container's port is fixed at `8000` by the Dockerfile's `CMD` (uvicorn doesn't read a `PORT`
+env var) and must match `[http_service].internal_port` below — both are static, so there's
+deliberately no `PORT` env var here (it used to exist and did nothing).
 
 Set as **Fly secrets** (sensitive, pulled from `.env` by `deploy.sh`):
 

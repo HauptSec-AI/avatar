@@ -10,7 +10,10 @@ primary_region = 'sjc'
 
 [env]
   COOKIE_SECURE = '1'
-  PORT = '8000'
+  # No PORT var here: the Dockerfile's CMD hardcodes --port 8000 (uvicorn doesn't
+  # read $PORT), and http_service.internal_port below is a separate, static Fly
+  # setting that must match it -- a PORT env var wouldn't actually change
+  # anything without also editing internal_port by hand, so it was dead config.
 
 [http_service]
   internal_port = 8000
