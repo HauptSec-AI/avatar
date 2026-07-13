@@ -22,3 +22,6 @@ test/screenshots/
 
 # macOS
 .DS_Store
+
+# Temporary files
+RECS.md

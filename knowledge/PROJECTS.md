@@ -8,6 +8,35 @@ This document is a knowledge base of work and personal projects, intended as sou
 
 _(Projects completed as part of professional roles)_
 
+
+### AI Harness Framework (2026)
+ 
+Built a harness-agnostic framework for centrally managing the files that AI coding harnesses rely on — agents.md, skills, MCP configurations, and similar artifacts. The framework maintains a single source of truth for these files and uses symlinks to point each supported harness at that centralized location, so a single update propagates instantly across every harness in use rather than requiring manual changes in multiple places.
+ 
+Developed for the enterprise team to enforce consistency across harness configurations and establish a repeatable process for maintaining core harness files as a team, rather than leaving each individual or harness to drift out of sync. The framework was also designed to make onboarding new harnesses straightforward, keeping the system extensible as new tools are adopted.
+ 
+**Key contributions:**
+- Designed a harness-agnostic architecture centralizing shared AI harness files (agents.md, skills, MCPs, etc.)
+- Implemented a symlink-based distribution model so updates in one location propagate across all connected harnesses
+- Established a consistent, repeatable process for the enterprise team to maintain core harness files
+- Built the framework to make adding new harnesses quick and low-effort
+
+---
+
+### Agentic Standup Bot (2026)
+ 
+Built an agentic bot that delivers the team's daily standup update live in Zoom, replacing manual status reporting with an automated, spoken briefing. The bot pulls in ServiceNow ticket status, internal tooling health, and log ingestion metrics, using MCPs to collect the underlying data and metrics needed for the update.
+ 
+Each day, the bot generates a script from a template incorporating day-of-the-week logic, so the timeframe of data being reported adjusts appropriately (for example, covering a single day versus a full weekend on a Monday). The generated script is converted to audio via a text-to-speech model, and the bot joins the team's Zoom meeting and plays the generated audio update when triggered by a designated keyword.
+ 
+**Key contributions:**
+- Designed the end-to-end agentic pipeline: data collection, script generation, TTS conversion, and Zoom playback
+- Used MCPs to pull standup-relevant data from ServiceNow, internal tooling, and log ingestion sources
+- Built a script template with day-of-the-week logic to correctly scope reporting timeframes
+- Implemented TTS-based audio generation and keyword-triggered playback within live Zoom meetings
+
+---
+
 ### Internal Python SDK for the PingOne API (2025)
 
 Built an internal Python SDK wrapping the PingOne API, creating a reusable foundation for a variety of downstream scripts and tooling. The SDK abstracted away authentication, pagination, and common request/response handling, making it faster to build new PingOne-integrated tools without repeating boilerplate API logic.
