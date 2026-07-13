@@ -109,10 +109,15 @@ async function adminFetch(input: string, init?: RequestInit): Promise<Response> 
   return r;
 }
 
-export async function adminListConversations(): Promise<ConversationSummary[]> {
+export interface AdminInboxResult {
+  conversations: ConversationSummary[];
+  scanTruncated: boolean;
+}
+
+export async function adminListConversations(): Promise<AdminInboxResult> {
   const r = await adminFetch("/admin/conversations");
   const body = await r.json();
-  return body.conversations;
+  return { conversations: body.conversations, scanTruncated: Boolean(body.scan_truncated) };
 }
 
 export async function adminOpenConversation(id: string): Promise<Message[]> {

@@ -366,7 +366,8 @@ async def admin_logout(response: Response):
 
 @app.get("/admin/conversations", dependencies=[Depends(security.require_admin)])
 async def admin_list_conversations():
-    return {"conversations": db.list_inbox()}
+    conversations, scan_truncated = db.list_inbox()
+    return {"conversations": conversations, "scan_truncated": scan_truncated}
 
 
 @app.post(

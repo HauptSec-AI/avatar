@@ -102,8 +102,15 @@ def resolve_conversation(conversation_id: str) -> None:
     ).eq("needs_attention", True).execute()
 
 
-def list_inbox() -> list[dict[str, Any]]:
-    """One round trip: scan recent rows, group into per-conversation summaries, newest first."""
+def list_inbox() -> tuple[list[dict[str, Any]], bool]:
+    """One round trip: scan recent rows, group into per-conversation summaries, newest first.
+
+    Returns (summaries, scan_truncated). scan_truncated is True when the scan
+    returned exactly INBOX_SCAN_LIMIT rows -- i.e. there may be older
+    conversations (or older activity on a conversation whose only rows are
+    past the cutoff) that this scan never saw, so the inbox could be
+    incomplete rather than exhaustive.
+    """
     result = (
         get_client()
         .table(TABLE)
@@ -113,6 +120,7 @@ def list_inbox() -> list[dict[str, Any]]:
         .execute()
     )
     rows = result.data
+    scan_truncated = len(rows) >= INBOX_SCAN_LIMIT
 
     by_conversation: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -136,7 +144,7 @@ def list_inbox() -> list[dict[str, Any]]:
             }
         )
     summaries.sort(key=lambda s: s["last_message_at"], reverse=True)
-    return summaries
+    return summaries, scan_truncated
 
 
 # ---------------------------------------------------------------------------

@@ -29,6 +29,7 @@ const countBadge = document.getElementById("countBadge") as HTMLSpanElement;
 const searchInput = document.getElementById("searchInput") as HTMLInputElement;
 const convoListEl = document.getElementById("convoList") as HTMLDivElement;
 const filterChips = Array.from(document.querySelectorAll<HTMLSpanElement>(".filter-chip"));
+const scanTruncatedBanner = document.getElementById("scanTruncatedBanner") as HTMLDivElement;
 
 const emptyState = document.getElementById("emptyState") as HTMLDivElement;
 const threadView = document.getElementById("threadView") as HTMLDivElement;
@@ -56,6 +57,14 @@ let pollTimer: number | undefined;
 let openConversationToken = 0;
 
 setupThemeToggle("themeToggle");
+
+function applyInboxResult(result: { conversations: ConversationSummary[]; scanTruncated: boolean }): void {
+  conversations = result.conversations;
+  // scan_truncated: the inbox scan hit INBOX_SCAN_LIMIT, so older conversations
+  // (or older activity on one whose only rows are past the cutoff) may be
+  // missing -- flag it rather than silently presenting a partial list as complete.
+  scanTruncatedBanner.style.display = result.scanTruncated ? "" : "none";
+}
 
 function displayName(c: ConversationSummary): string {
   return c.conversation_name || `conv_${c.conversation_id.slice(0, 8)}`;
@@ -320,7 +329,7 @@ function enterDashboard(): void {
 async function pollTick(): Promise<void> {
   if (document.hidden) return;
   try {
-    conversations = await adminListConversations();
+    applyInboxResult(await adminListConversations());
   } catch (e) {
     if (e instanceof AuthError) showLoginGate();
     return;
@@ -367,7 +376,7 @@ loginForm.addEventListener("submit", async (e) => {
     return;
   }
   try {
-    conversations = await adminListConversations();
+    applyInboxResult(await adminListConversations());
   } catch {
     conversations = [];
   }
@@ -381,7 +390,7 @@ logoutBtn.addEventListener("click", async () => {
 
 async function boot(): Promise<void> {
   try {
-    conversations = await adminListConversations();
+    applyInboxResult(await adminListConversations());
   } catch (e) {
     if (e instanceof AuthError) {
       showLoginGate();

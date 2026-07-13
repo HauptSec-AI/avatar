@@ -31,6 +31,73 @@ def test_list_conversations_includes_seeded_conversation(admin_client):
     assert summary["conversation_name"] == "AB"
     assert summary["message_count"] == 1
     assert summary["unread"] is True
+    assert "scan_truncated" in body
+
+
+class _FakeResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeQuery:
+    def __init__(self, data):
+        self._data = data
+
+    def select(self, *a, **k):
+        return self
+
+    def order(self, *a, **k):
+        return self
+
+    def limit(self, n):
+        self._data = self._data[:n]
+        return self
+
+    def execute(self):
+        return _FakeResult(self._data)
+
+
+class _FakeClient:
+    def __init__(self, data):
+        self._data = data
+
+    def table(self, name):
+        return _FakeQuery(self._data)
+
+
+def _fake_row(conversation_id: str, seconds: int) -> dict:
+    return {
+        "conversation_id": conversation_id,
+        "conversation_name": None,
+        "role": "visitor",
+        "content": f"msg-{seconds}",
+        "created_at": f"2024-01-01T00:00:{seconds:02d}Z",
+        "read": True,
+        "needs_attention": False,
+    }
+
+
+def test_list_inbox_reports_scan_truncated_when_scan_hits_the_limit(monkeypatch):
+    """RECS.md: 'Admin inbox silently caps at a 3000-row scan window, no "there
+    may be more" UI signal'. Mocks the Supabase client entirely so the scan limit
+    can be controlled precisely, independent of real table state."""
+    monkeypatch.setattr(db, "INBOX_SCAN_LIMIT", 3)
+    rows = [_fake_row(f"c{i}", i) for i in range(5)]
+    monkeypatch.setattr(db, "get_client", lambda: _FakeClient(rows))
+
+    summaries, scan_truncated = db.list_inbox()
+    assert scan_truncated is True
+    assert len(summaries) == 3
+
+
+def test_list_inbox_reports_not_truncated_when_scan_is_under_the_limit(monkeypatch):
+    monkeypatch.setattr(db, "INBOX_SCAN_LIMIT", 10)
+    rows = [_fake_row(f"c{i}", i) for i in range(3)]
+    monkeypatch.setattr(db, "get_client", lambda: _FakeClient(rows))
+
+    summaries, scan_truncated = db.list_inbox()
+    assert scan_truncated is False
+    assert len(summaries) == 3
 
 
 def test_open_conversation_marks_read_and_clears_attention(admin_client):

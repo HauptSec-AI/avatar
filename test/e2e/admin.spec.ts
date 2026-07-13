@@ -238,6 +238,29 @@ test.describe("Admin dashboard", () => {
     await expect(page.locator(".msg")).toHaveCount(countAfterB);
   });
 
+  test("inbox shows a banner when the scan was truncated (there may be more)", async ({ page }) => {
+    // RECS.md: "Admin inbox silently caps at a 3000-row scan window, no 'there
+    // may be more' UI signal". Mocked response, since seeding 3000+ real rows
+    // just to trigger this is impractical.
+    await loginAsAdmin(page);
+    await page.route("**/admin/conversations", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({ json: { conversations: [], scan_truncated: true } })
+        : route.continue(),
+    );
+    await page.reload();
+    await expect(page.locator("#scanTruncatedBanner")).toBeVisible();
+
+    await page.unroute("**/admin/conversations");
+    await page.route("**/admin/conversations", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({ json: { conversations: [], scan_truncated: false } })
+        : route.continue(),
+    );
+    await page.reload();
+    await expect(page.locator("#scanTruncatedBanner")).toBeHidden();
+  });
+
   test("logout returns to the login gate", async ({ page }) => {
     await loginAsAdmin(page);
     await page.click("#logoutBtn");
